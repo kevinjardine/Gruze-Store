@@ -1,1 +1,33 @@
-Setting up a git repository for Gruze Store.
+Gruze is a persistent object store written in Haskell.
+
+This is currently alpha quality code tested only with MySQL (although it may
+work with other databases as it uses ODBC).
+
+An example model (blogging with multiple user roles) can be found in gruzeTest.
+
+To try this out:
+
+a. cd to gruzeStore and type
+
+cabal install
+
+b. create a database and run the schema in gruzeStore/schema/schema.sql to add
+the required tables
+
+c. copy the data directory somewhere and make it writable by Haskell
+
+d. cd to gruzeTest and edit the config values near the top of Main.hs
+to match your own configuration
+
+e. type
+
+cabal install
+
+in gruzeTest
+
+f. find the gruzeTest executable in gruzeTest/dist/build/gruzeTest and run
+it from a shell
+
+g. read gruzeTest/Main.hs for more information
+
+Eventually there will be a test suite and full documentation.
