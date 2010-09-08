@@ -85,6 +85,12 @@ data GrzObj = GrzObjID GrzInt |
     }
     deriving (Read, Show)
     
+class ToGrzObj a where
+    toObj :: a -> GrzObj
+    
+instance ToGrzObj GrzObj where
+    toObj a = a
+    
 instance GrzAtomBoxClass GrzObj where
     getAtomBox c = objMetadata c
     putAtomBox b c = c { objMetadata = b } 

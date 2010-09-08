@@ -3,6 +3,10 @@ module Data.Store.Gruze.Container (
     -- constructors (note that the internals of GrzObj are not exported)
     GrzObj, GrzBox(..),
     
+    -- classes
+    
+    ToGrzObj(..),
+    
     -- types
     GrzAtom, GrzAtomBox, GrzObjBox, GrzInt, GrzString, GrzKey,
 

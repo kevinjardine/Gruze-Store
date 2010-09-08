@@ -1,7 +1,7 @@
 module Data.Store.Gruze.IO (
     GrzHandle(..), 
     
-    grzLog, getHandler, grzCommit,
+    grzLog, getHandle, grzCommit,
     
     -- query functions
     getObjs, getBareObjs, getObjIDs, getObjCount, getObjAggCount, getObjAggSumCount,
@@ -65,8 +65,8 @@ atomToStorageInt (GrzAtomFile s) = 3
 
 -- gets the handle
 
-getHandler :: (GrzAtomBox -> GrzAtomBox) -> IO GrzHandle   
-getHandler c = do
+getHandle :: (GrzAtomBox -> GrzAtomBox) -> IO GrzHandle   
+getHandle c = do
     let config = c emptyAtomBox
     dbc <- getDatabaseConnection config
     return $ GrzHandle {
