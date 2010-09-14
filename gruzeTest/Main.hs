@@ -1,10 +1,15 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 import Data.Store.Gruze.Container
 import Data.Store.Gruze.IO
 import Data.Store.Gruze.QueryDef
 
 import Data.Maybe
+import Data.Typeable
+
+-- TODO: relationships should be types
+-- add site, owner and container classes
 
 main = do
 
@@ -48,17 +53,16 @@ main = do
       permission relationships.
     -} 
                 
-    -- get handle (which opens the database connection) 
-    -- in this simple example, the handle is passed
-    -- directly to all the model functions
-    -- in a more complex example, it could be hidden in
-    -- a Reader monad or some other state monad
-    -- to reduce parameter clutter          
+    -- get handle (which opens the database connection)
+    
+    -- In this simple example, the handle is passed directly to all the model
+    -- functions. In a more complex example, the handle could be hidden in a
+    -- Reader monad or some other state monad to reduce parameter clutter          
     grzH' <- getHandle config
     
     -- delete any previous test site (and all its content)
-    let testSitesQd = (hasType "site") . (hasStringIn "subtype" ["grzTest"])
-    testSites <- getBareObjs grzH' testSitesQd 0 0
+    let testSitesQd = hasStringIn "subtype" ["grzTest"]
+    testSites <- getBareObjs grzH' Site testSitesQd 0 0
     mapM_ (delObj grzH') testSites
     
     -- create a site to hold all the test content    
@@ -68,15 +72,15 @@ main = do
         "Used for adding content to test out the Gruze object store."
     
     putStrLn "\nNew site created:"     
-    putStrLn $ ppObj $ toObj site
+    putStrLn $ ppObj site
     
     -- make this the default site to be used by other objects
     let grzH = setDefaultSite grzH' site
 
     -- make some fields searchable
-    setSearchable grzH "blogPost" ["title","body","tags"]
-    setSearchable grzH "blog" ["title"]
-    setSearchable grzH "comment" ["body"]
+    setSearchable grzH BlogPost ["title","body","tags"]
+    setSearchable grzH Blog ["title"]
+    setSearchable grzH Comment ["body"]
     
     -- create roles for teachers and students
     teacherRole <- createRole grzH
@@ -120,12 +124,27 @@ main = do
     -- John posts to the teacher blog
     post <- postBlog grzH teacherBlog john
         "My first blog post" 
-        "Testing the Gruze object store." 
+        "Testing the Gruze object stre." 
         ["testing","haskell","gruze"]
         Nothing
         
+    -- John edits the blog post
+    
+    let edits = 
+            (setString "title" "My first blog post (edited)")
+            . (setString "body" "Testing the Gruze object store.")
+    
+    -- apply edits to original post and save    
+    revisedPost <- saveObj grzH (edits post)
+        
     putStrLn "\nNew blog post created, full output:"           
-    putStrLn $ ppObjFull (toObj post)
+    putStrLn $ ppObjFull revisedPost
+    
+    -- load the owner object including the name field
+    -- not all objects have owners so this is a maybe
+    postOwner <- maybeLoadOwner grzH User revisedPost ["name"]
+    
+    putStrLn $ "Blog post owner: " ++ (fromMaybe "" $ fmap ppObjFull postOwner)              
     
     -- Wendy and Jane rate the post, and Jane leaves a comment
     
@@ -138,13 +157,13 @@ main = do
     
     -- get the number of comments
     commentCount <- getObjCount grzH
-        ((hasType "comment")
-        . (hasContainer (toObj post)))
+        ((hasType Comment)
+        . (hasContainer post))
     
     -- get the sum and count of the value field of the relevant ratings        
     r <- getObjAggSumCount grzH
-        ((hasType "rating")
-        . (hasContainer (toObj post)))
+        ((hasType Rating)
+        . (hasContainer post))
         "value"
         
     putStrLn $ "Report on John's blog post:\nNumber of comments: " 
@@ -156,6 +175,9 @@ main = do
     
     -- when searching, Tom cannot find the same content as John
     -- because students and teachers have different roles
+    
+    -- since seatchForContent does not know in advance what
+    -- content will be returned, these are unwrapped objects
         
     johnContent <- searchForContent grzH john "Gruze"
     
@@ -168,15 +190,34 @@ main = do
     mapM (putStrLn .  ppObj) tomContent
     
 -- define some type safe wrappers
--- (the ToGrzObj class provides a toObj function)
-   
-newtype Site = Site GrzObj deriving ToGrzObj
-newtype User = User GrzObj deriving ToGrzObj
-newtype Role = Role GrzObj deriving ToGrzObj
-newtype Collection = Collection GrzObj deriving ToGrzObj
-newtype Blog = Blog GrzObj deriving ToGrzObj
-newtype BlogPost = BlogPost GrzObj deriving ToGrzObj
-newtype Comment = Comment GrzObj deriving ToGrzObj
+
+-- some experimental simple macros to remove the boilerplate
+
+#define defSite(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzSiteClass)
+#define defContainer(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzContainerClass)
+#define defOwner(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzOwnerClass)
+#define defObj(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass)
+#define defOwnerContainer(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzOwnerClass,GrzContainerClass)
+
+-- sites
+
+defSite (Site)
+
+-- owners
+
+defOwner (User)
+
+-- containers
+
+defContainer (Collection)
+defContainer (Blog)
+defContainer (BlogPost)
+
+--other objects
+    
+defObj (Comment)
+defObj (Rating)
+defObj (Role)
 
 newtype File = File GrzAtom
   
@@ -184,11 +225,10 @@ newtype File = File GrzAtom
 
 createSite :: GrzHandle -> String -> String -> String -> IO Site
 createSite grzH subType title description =
-    fmap Site (createObj grzH od)
+    createObj grzH Site od
     where
         od =
-            (setType "site")
-            . (setString "subtype" subType)
+            (setString "subtype" subType)
             . (setString "title" title)
             . (setString "description" title)
 
@@ -199,7 +239,7 @@ setDefaultSite grzH (Site site) =
 -- create a user and optionally add the user to a role    
 createUser :: GrzHandle -> String -> String -> Maybe Role -> IO User
 createUser grzH name email maybeRole = do
-    user <- fmap User (createObj grzH od)
+    user <- createObj grzH User od
     case maybeRole of
         Just role -> do
             addUserToRole grzH user role
@@ -208,41 +248,37 @@ createUser grzH name email maybeRole = do
             return user
     where
         od =
-            (setType "user")
-            . (setSite (grzDefaultSite grzH))
+            (setSite (grzDefaultSite grzH))
             . (setString "name" name)
             . (setString "email" email)
    
 createBlog :: GrzHandle -> Collection -> String -> IO Blog
-createBlog grzH (Collection c) title =
-    fmap Blog (createObj grzH od)
+createBlog grzH c title =
+    createObj grzH Blog od
     where
         od =
-            (setType "blog")
-            . (setSite (grzDefaultSite grzH))
+            (setSite (grzDefaultSite grzH))
             . (setContainer c)
             . (setString "title" title)
                 
 createCollection :: GrzHandle -> String -> IO Collection
 createCollection grzH title = 
-    fmap Collection (createObj grzH od)
+    createObj grzH Collection od
     where
         od =
-            (setType "collection")
-            . (setSite (grzDefaultSite grzH))
+            (setSite (grzDefaultSite grzH))
             . (setString "title" title)
 
 -- posts to the blog and sets the permission to teachers only
 postBlog :: GrzHandle -> Blog -> User -> String -> String -> [String] -> Maybe File -> IO BlogPost
-postBlog grzH (Blog blog) (User owner) title body tags image = do
-    bp <- fmap BlogPost (createObj grzH od)
-    grantPermission grzH (toObj bp) "view" "teacher"
+postBlog grzH blog user title body tags image = do
+    bp <- createObj grzH BlogPost od
+    grantPermission grzH bp "view" "teacher"
     return bp
     where
         od =
-            (setType "blogPost")
-            . (setSite (grzDefaultSite grzH))
-            . (setOwner owner)
+            (setSite (grzDefaultSite grzH))
+            . (setOwner user)
             . (setContainer blog)
             . (setString "title" title)
             . (setString "body" body)
@@ -253,14 +289,13 @@ postBlog grzH (Blog blog) (User owner) title body tags image = do
                     
 -- comments on a blog post and sets the permission to teachers only
 commentOnBlogPost :: GrzHandle -> BlogPost -> User -> String -> IO Comment
-commentOnBlogPost grzH (BlogPost post) (User commenter) comment = do
-    c <- fmap Comment (createObj grzH od)
+commentOnBlogPost grzH post commenter comment = do
+    c <- createObj grzH Comment od
     grantPermission grzH (toObj c) "view" "teacher"
     return c
     where
         od =
-            (setType "comment")
-            . (setSite (grzDefaultSite grzH))
+            (setSite (grzDefaultSite grzH))
             . (setOwner commenter)
             . (setContainer post)
             . (setString "body" comment)
@@ -268,12 +303,11 @@ commentOnBlogPost grzH (BlogPost post) (User commenter) comment = do
 -- rates a blog post
 rateBlogPost :: GrzHandle -> BlogPost -> User -> Int -> IO ()
 rateBlogPost grzH (BlogPost post) (User rater) rating = do
-    createObj grzH od
+    createObj grzH Rating od
     return ()
     where
         od =
-            (setType "rating")
-            . (setSite (grzDefaultSite grzH))
+            (setSite (grzDefaultSite grzH))
             . (setOwner rater)
             . (setContainer post)
             . (setInt "value" rating)
@@ -281,7 +315,7 @@ rateBlogPost grzH (BlogPost post) (User rater) rating = do
 -- searches for content that the given user has permission to see                    
 searchForContent :: GrzHandle -> User -> String -> IO [GrzObj]
 searchForContent grzH (User user) s = do
-    getObjs grzH qd 0 0
+    getUnwrappedObjs grzH qd 0 0
     where
         qd =
             (hasPermission user "view")
@@ -293,11 +327,10 @@ searchForContent grzH (User user) s = do
                 
 createRole :: GrzHandle -> String -> String -> IO Role
 createRole grzH title description = 
-    fmap Role (createObj grzH od)
+    createObj grzH Role od
     where
         od =
-            (setType "role")
-            . (setSite (grzDefaultSite grzH))
+            (setSite (grzDefaultSite grzH))
             . (setString "title" title)
             . (setString "description" description)
                                
@@ -305,21 +338,20 @@ addUserToRole :: GrzHandle -> User -> Role -> IO ()
 addUserToRole grzH (User user) (Role role) =
     addRel grzH "hasRole" user role
     
-grantPermission :: GrzHandle -> GrzObj -> String -> String -> IO ()
+grantPermission :: GrzObjClass o => GrzHandle -> o -> String -> String -> IO ()
 grantPermission grzH obj perm role = do
-    objs <- getObjs grzH qd 0 1
+    objs <- getObjs grzH Role qd 0 1
     if (not $ null objs) && (isValidObj $ head objs)
         then
             addRel grzH ("perm:" ++ perm) (head objs) obj
         else
             return ()
     where
-        qd =
-            (hasType "role") 
-            . (hasStringIn "title" [role])
+        qd = hasStringIn "title" [role]
 
 -- hasIndRel looks for indirect relationships
 -- linking the user and the object through
 -- the role object and the permission relationship            
 hasPermission user perm =
     hasIndRel "hasRole" ("perm:" ++ perm) [user]
+    

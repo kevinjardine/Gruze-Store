@@ -57,5 +57,7 @@ Executable gruzeTest
   -- Other-modules:       
   
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
-  -- Build-tools:         
+  -- Build-tools:
+  
+  Extensions: CPP         
   

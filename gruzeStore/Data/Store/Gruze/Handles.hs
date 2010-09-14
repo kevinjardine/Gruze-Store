@@ -54,7 +54,12 @@ maybeGetStringHandle grzH s =
     do
         qs <- grzQuery grzH ("SELECT id, string FROM names WHERE hash = " ++ (show hash_s)) []
         let ids = catMaybes $ map (getStringHandleFromQueryResult s) qs
-        if null ids then return Nothing else return $ Just (s, head ids)
+        if null ids 
+            then do
+                grzLog grzH ("Unable to find handle for string: " ++ s)
+                return Nothing 
+            else 
+                return $ Just (s, head ids)
     where
         hash_s = fromIntegral (hashString s)
 

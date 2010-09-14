@@ -4,11 +4,12 @@ module Data.Store.Gruze.IO (
     grzLog, getHandle, grzCommit,
     
     -- query functions
-    getObjs, getBareObjs, getObjIDs, getObjCount, getObjAggCount, getObjAggSumCount,
-    setSearchable,
+    getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
+    getObjCount, getObjAggCount, getObjAggSumCount, setSearchable,
     
     -- object IO
-    createObj, loadObj, saveObj, delObj,
+    createObj, saveObj, delObj,
+    loadObj, maybeLoadObj, maybeLoadContainer, maybeLoadOwner, maybeLoadSite,
     
     -- object pretty printers    
     ppObj, ppObjFull,
@@ -41,6 +42,7 @@ import qualified Data.Map as Map
 --import Control.Monad (forM, when)
 --import Control.Monad.Reader(liftIO,ask)
 import Data.Maybe
+import Data.Typeable
 
 import System.Locale (defaultTimeLocale)
 import qualified Data.ByteString as BS
@@ -122,10 +124,13 @@ grzSetMetadataArray _ _ [] = return 0
 
 -- higher level object functions
 
-createObj :: GrzHandle -> (GrzObj -> GrzObj) -> IO GrzObj
-createObj grzH p =
+-- takes a type constructor and some setters
+-- and saves the object to the datebase, returning the new wrapped object
+
+createObj :: (Typeable o, GrzObjClass o) => GrzHandle -> (GrzObj -> o) -> (GrzObj -> GrzObj) -> IO o
+createObj grzH w p =
     if null t then 
-        return invalidObj
+        return (w invalidObj)
     else do
         ptime <- getPOSIXTime
         let time = floor ptime
@@ -134,7 +139,8 @@ createObj grzH p =
         qs <- grzQuery grzH "SELECT LAST_INSERT_ID() AS id" []
         let guid = ((fromSql (head (head qs)))::Int)
         let theObj = obj {
-            objID = guid, 
+            objID = guid,
+            objType = t,
             objTimeCreated = time, 
             objTimeUpdated = time,
             objOwner = shrinkObj $ getOwner obj,
@@ -146,36 +152,82 @@ createObj grzH p =
         -- TODO: perhaps f could return an error condition triggering a rollback?
         f <- grzAddMetadataArray grzH guid (Map.toList $ objMetadata obj)
         grzCommit grzH
-        return theObj
+        return $ w theObj
     where
         obj = p emptyObj
         enabled = if isEnabled obj then 1 else 0
         siteID = getID $ getSite obj
         ownerID = getID $ getOwner obj
         containerID = getID $ getContainer obj
-        t = trimWhiteSpace $ getType obj 
+        t = objWrapperToString (w emptyObj) 
         query = "INSERT INTO objects(objectType,ownerGuid,containerGuid,siteGuid,timeCreated,timeUpdated,enabled) values(?,?,?,?,?,?,?)"         
 
 {-|
   The 'loadObj' function loads the current data for an object from the database,
   including the specified metadata.
 -}        
-loadObj :: GrzHandle    -- ^ The data handle 
-    -> GrzObj           -- ^ The object to refresh
-    -> [String]         -- ^ The names of the metadata to load
-    -> IO GrzObj        -- ^ The returned object
+loadObj :: GrzObjClass o => 
+    GrzHandle    -- ^ The data handle 
+    -> o         -- ^ The object to refresh
+    -> [String]  -- ^ The names of the metadata to load
+    -> IO o      -- ^ The returned object
 loadObj grzH obj needs =
     do
-        objs <- getObjs grzH qd 0 1
+        objs <- getUnwrappedObjs grzH qd 0 1
         return $ case objs of
-                    [] -> invalidObj
-                    a  -> head a
+                    [] -> replaceObj obj invalidObj
+                    a  -> replaceObj obj (head a)
     where
         qd = (withObjs [obj]) . (withData needs)
+        
+maybeLoadObj :: GrzObjClass o => 
+    GrzHandle           -- ^ The data handle
+    -> (GrzObj -> o)    -- ^ the wrapper
+    -> GrzObj           -- ^ The unwrapped object to load
+    -> [String]         -- ^ The names of the metadata to load
+    -> IO (Maybe o)       -- ^ The returned object
+maybeLoadObj grzH w obj needs =
+    if isValidObj obj
+        then do
+            o2 <- loadObj grzH (w obj) needs
+            if isValidObj o2
+                then
+                    return $ maybeConvert w (toObj o2)
+                else
+                    return Nothing           
+        else
+            return Nothing
 
--- TODO: need some exception handling here        
-saveObj :: GrzHandle -> GrzObj -> IO GrzObj
-saveObj grzH obj =
+maybeLoadContainer :: (GrzObjClass o, GrzObjClass oc, GrzContainerClass oc) => 
+    GrzHandle 
+    -> (GrzObj -> oc) 
+    -> o 
+    -> [GrzString] 
+    -> IO (Maybe oc)
+    
+maybeLoadContainer grzH w obj needs = maybeLoadObj grzH w (getContainer obj) needs
+
+maybeLoadOwner :: (GrzObjClass o, GrzOwnerClass oo) => 
+    GrzHandle 
+    -> (GrzObj -> oo) 
+    -> o 
+    -> [GrzString] 
+    -> IO (Maybe oo)
+    
+maybeLoadOwner grzH w obj needs = maybeLoadObj grzH w (getOwner obj) needs
+
+maybeLoadSite :: (GrzObjClass o, GrzSiteClass os) => 
+    GrzHandle 
+    -> (GrzObj -> os) 
+    -> o 
+    -> [GrzString] 
+    -> IO (Maybe os)
+    
+maybeLoadSite grzH w obj needs = maybeLoadObj grzH w (getSite obj) needs
+
+-- TODO: need some exception handling here   
+saveObj :: GrzObjClass o => GrzHandle -> o -> IO o
+saveObj grzH o =
     do 
         ptime <- getPOSIXTime
         let time = floor ptime
@@ -184,8 +236,9 @@ saveObj grzH obj =
         -- TODO: perhaps f could return an error condition triggering a rollback?
         f <- grzSetMetadataArray grzH guid (Map.toList $ getMetadata theObj)
         grzCommit grzH
-        return theObj
+        return $ replaceObj o theObj
     where
+        obj = toObj o
         guid = getID obj
         enabled = if isEnabled obj then 1 else 0
         siteID = getID $ getSite obj
@@ -200,8 +253,8 @@ saveObj grzH obj =
   TODO: add a version that allows providing a function to do something before an event is deleted.
 -} 
 
-delObj :: GrzHandle -> GrzObj -> IO Bool
-delObj grzH obj = delObjByID grzH (getID obj)
+delObj :: GrzObjClass o => GrzHandle -> o -> IO Bool
+delObj grzH obj = delObjByID grzH (getID $ toObj obj)
 
 delObjByID :: GrzHandle -> Int -> IO Bool
 delObjByID grzH 0 = return True
@@ -241,16 +294,22 @@ delObjByID grzH guid =
         relationship_query = "DELETE FROM relationships WHERE guid1 = ? OR guid2 = ?"
         object_query = "DELETE FROM objects WHERE guid = ?"
         
-ppObj :: GrzObj -> String
-ppObj (GrzObjID i) = "object " ++ (show i)
-ppObj obj = "object " 
+ppObj :: GrzObjClass o => o -> String
+ppObj = ppObj' . toObj
+
+ppObj' :: GrzObj -> String
+ppObj' (GrzObjID i) = "object " ++ (show i)
+ppObj' obj = "object " 
                 ++ (show $ getID obj) 
                 ++ " [" ++ (getType obj) 
                 ++ "]"
 
-ppObjFull :: GrzObj -> String
-ppObjFull (GrzObjID i) = "object " ++ (show i)
-ppObjFull obj = "\nobject " 
+ppObjFull :: GrzObjClass o => o -> String
+ppObjFull = ppObjFull' . toObj
+
+ppObjFull' :: GrzObj -> String
+ppObjFull' (GrzObjID i) = "object " ++ (show i)
+ppObjFull' obj = "\nobject " 
                 ++ (show $ getID obj) 
                 ++ " [" ++ (getType obj) 
                 ++ "] {\n\n"
@@ -281,9 +340,10 @@ ppAtomPair (k,v) = "        " ++ k ++ ": \n            " ++ (ppAtomList v)
 
 ppAtomList v = intercalate ", " (map ppAtom v)      
         
--- relationship functions                    
+-- relationship functions
+-- TODO: make relationships full types and not just strings                    
 
-addRel :: GrzHandle -> String -> GrzObj -> GrzObj -> IO ()
+addRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> String -> o1 -> o2 -> IO ()
 addRel grzH rel obj1 obj2 =
     do
         b <- checkRel grzH rel obj1 obj2
@@ -300,7 +360,7 @@ addRel grzH rel obj1 obj2 =
     where
         query = "INSERT INTO relationships(guid1,guid2,relationshipType,timeCreated) VALUES(?,?,?,?)"
         
-delRel :: GrzHandle -> String -> GrzObj -> GrzObj -> IO ()
+delRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> String -> o1 -> o2 -> IO ()
 delRel grzH rel obj1 obj2 =
     do
         maybeH <- maybeGetStringHandle grzH rel
@@ -312,7 +372,7 @@ delRel grzH rel obj1 obj2 =
     where
         query = "DELETE FROM relationships WHERE guid1 = ? AND guid2 = ? AND relationshipType = ?"   
    
-checkRel :: GrzHandle -> String -> GrzObj -> GrzObj -> IO Bool
+checkRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> String -> o1 -> o2 -> IO Bool
 checkRel grzH rel obj1 obj2 =
     do
         maybeH <- maybeGetStringHandle grzH rel
@@ -324,93 +384,138 @@ checkRel grzH rel obj1 obj2 =
     where
         query = "SELECT * FROM relationships WHERE guid1 = ? AND guid2 = ? AND relationshipType = ?" 
         
-setSearchable :: GrzHandle -> String -> [String] -> IO ()
-setSearchable grzH ot ns = do
+{-|
+  setSearchable tells the object store which fields are searchable.
+-} 
+        
+setSearchable :: GrzObjClass o => 
+    GrzHandle           -- ^ data handle
+    -> (GrzObj -> o)    -- ^ wrapper 
+    -> [String]         -- ^ list of names for metadata to be searchable for this type wrapper
+    -> IO ()
+setSearchable grzH w ns = do
     oti <- getStringHandle grzH ot
     nsi <- mapM (getStringHandle grzH) ns
     grzQuery grzH deleteQuery [toSql oti]
     mapM_ (grzQuery grzH insertQuery) (map (\x -> [toSql oti, toSql x]) nsi)
     
     where
+        ot = objWrapperToString (w emptyObj)
         deleteQuery = "DELETE FROM searchable WHERE typeID = ?"
-        insertQuery = "INSERT INTO searchable(typeID, nameID) values (?,?)"      
-          
+        insertQuery = "INSERT INTO searchable(typeID, nameID) values (?,?)"
+        
 {-|
-  The 'getObjs' function runs a query definiton and retrieves a list of objects
-  from the database. Provide a limit of 0 to get all objects for the query.
+  getUnwrappedObjs runs a query definition and retrieves a list of 
+  unwrapped objects from the database. Provide a limit of 0 to get all objects
+  for the query.
 -}        
-getObjs :: GrzHandle                 -- ^ The data handle
-    -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition
+getUnwrappedObjs :: GrzHandle           -- ^ data handle
+    -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
     -> Int                              -- ^ offset
     -> Int                              -- ^ limit (number of objects to return)
     -> IO [GrzObj]                      -- ^ list of objects
-getObjs grzH queryDefs offset limit =
+getUnwrappedObjs grzH queryDefs offset limit =
     do
         query <- grzCreateQuery grzH queryDefs
-        -- grzLog $ (snd query) ++ "\n"
         result <- runQuery grzH $ (addToQuery (addToQuery query orderBit) limitBit) 
-        -- grzLog $ (show result) ++ "\n"
         return $ queryResultToObjs result
+    where
+        limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
+        orderBit = " ORDER BY q1.guid DESC "      
+          
+{-|
+  getObjs runs a query definition and retrieves a list of objects with the
+  given type from the database. Provide a limit of 0 to get all objects for
+  the query.
+-}        
+getObjs :: GrzObjClass o => 
+        GrzHandle                       -- ^ data handle
+    -> (GrzObj -> o)                    -- ^ wrapper
+    -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
+    -> Int                              -- ^ offset
+    -> Int                              -- ^ limit (number of objects to return)
+    -> IO [o]                           -- ^ list of objects
+getObjs grzH w queryDefs offset limit =
+    do
+        query <- grzCreateQuery grzH (queryDefs . (hasType w))
+        result <- runQuery grzH $ (addToQuery (addToQuery query orderBit) limitBit) 
+        return $ map w (queryResultToObjs result)
     where
         limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
         orderBit = " ORDER BY q1.guid DESC "
         
 {-|
-  The 'getObjIDs' function runs a query definiton and retrieves a list of object ids
-  from the database. Provide a limit of 0 to get all object ids for the query.
+  getObjIDs runs a query definiton and retrieves a list of object ids from the
+  database. Provide a limit of 0 to get all object ids for the query.
 -}        
-getObjIDs :: GrzHandle               -- ^ The data handle
-    -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition
+getObjIDs :: GrzHandle                  -- ^ data handle
+    -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
     -> Int                              -- ^ offset
     -> Int                              -- ^ limit (number of objects to return)
     -> IO [Int]                         -- ^ list of object IDs
 getObjIDs grzH queryDefs offset limit =
     do
         query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTID))
-        -- grzLog $ (snd query) ++ "\n"
         result <- runQuery grzH $ (addToQuery (addToQuery query orderBit) limitBit) 
-        -- grzLog $ (show result) ++ "\n"
         return $ map (\x -> fromSql $ head x) (fst result)
     where
         limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
         orderBit = " ORDER BY guid DESC "
         
 {-|
-  The 'getBareObjs' function runs a query definiton and retrieves a list of bare objects
-  (GrzObjID id) from the database. Provide a limit of 0 to get all objects for the query.
+  getBareObjs runs a query definition and retrieves a list of bare objects
+  (w (GrzObjID id) ) from the database. Provide a limit of 0 to get all objects
+  for the query.
 -}        
-getBareObjs :: GrzHandle               -- ^ The data handle
+getBareObjs :: GrzObjClass o =>
+        GrzHandle                       -- ^ The data handle
+    -> (GrzObj -> o)                    -- ^ wrapper
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition
     -> Int                              -- ^ offset
     -> Int                              -- ^ limit (number of objects to return)
-    -> IO [GrzObj]                         -- ^ list of objects
-getBareObjs grzH queryDefs offset limit = fmap (map GrzObjID) (getObjIDs grzH queryDefs offset limit)
+    -> IO [o]                           -- ^ list of objects
+getBareObjs grzH w queryDefs offset limit = 
+    fmap (map (w . GrzObjID) ) (getObjIDs grzH (queryDefs . (hasType w)) offset limit)
+
+{-|
+  getUnwrappedBareObjs runs a query definition and retrieves a list of unwrapped
+  bare objects (GrzObjID id) from the database. Provide a limit of 0 to get all
+  objects for the query.
+-}        
+getUnwrappedBareObjs :: 
+        GrzHandle                       -- ^ The data handle
+    -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition
+    -> Int                              -- ^ offset
+    -> Int                              -- ^ limit (number of objects to return)
+    -> IO [GrzObj]                           -- ^ list of objects
+getUnwrappedBareObjs grzH queryDefs offset limit = fmap (map GrzObjID) (getObjIDs grzH queryDefs offset limit)
+
         
 {-|
   The 'getObjCount' function runs a query definition and retrieves a count of objects
   from the database.
 -}        
-getObjCount :: GrzHandle -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition 
-    -> IO Int         -- ^ count of objects
+getObjCount :: 
+    GrzHandle                           -- ^ data handle
+    -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition 
+    -> IO Int                           -- ^ count of objects
 getObjCount grzH queryDefs =
     do
         query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTCount))
-        -- grzLog $ (snd query) ++ "\n"
         result <- runQuery grzH query
-        -- grzLog $ (show result) ++ "\n"
         return $ queryResultToCount result
         
 {-|
   The 'getObjAggCount' function takes a query definition and a metadata name.
   It retrieves a count of objects from the database that have metadata with that name.
 -}        
-getObjAggCount :: GrzHandle         -- ^ data handle
+getObjAggCount :: GrzHandle             -- ^ data handle
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
     -> GrzString                        -- ^ metadata name 
     -> IO Int                           -- ^ count of objects
 getObjAggCount grzH queryDefs name =
     do
-        query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggCount) . (hasAgg name))
+        query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggCount) . (hasData name))
         -- grzLog $ (snd query) ++ "\n"
         result <- runQuery grzH query
         -- grzLog $ (show result) ++ "\n"
@@ -427,7 +532,8 @@ getObjAggSumCount :: GrzHandle         -- ^ data handle
     -> IO (Int, Int)                   -- ^ count of objects
 getObjAggSumCount grzH queryDefs name =
     do
-        query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggSumCount) . (hasAgg name))
+        query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggSumCount) . (hasData name))
+        grzLog grzH ("In getObjAggSumCount, " ++ (show query))
         -- grzLog $ (snd query) ++ "\n"
         result <- runQuery grzH query
         -- grzLog $ (show result) ++ "\n"

@@ -5,7 +5,8 @@ module Data.Store.Gruze.Container (
     
     -- classes
     
-    ToGrzObj(..),
+    GrzObjClass(..), GrzContainerClass(..), GrzOwnerClass(..), GrzSiteClass(..),
+    GrzAtomBoxClass(..),
     
     -- types
     GrzAtom, GrzAtomBox, GrzObjBox, GrzInt, GrzString, GrzKey,
@@ -16,10 +17,14 @@ module Data.Store.Gruze.Container (
     atomToBool, maybeAtomToBool, boolToAtom, isBoolAtom,
     atomToFileID, maybeAtomToFileID, isFileAtom,
     
-    -- object accessors
-    emptyObj, invalidObj, getID, isValidObj, setType, getType,
-    getTimeCreated, getTimeUpdated, setOwner, getOwner, setContainer, getContainer, 
-    setSite, getSite, setEnabled, isEnabled, shrinkObj,
+    -- special object constructors
+    emptyObj, invalidObj,
+    
+    -- object setter (setType is only allowed for generic GrzObjs)    
+    setType,
+    
+    -- object type convert    
+    maybeConvert, objWrapperToString,
     
     -- atom box functions
     
@@ -49,7 +54,7 @@ module Data.Store.Gruze.Container (
     -- object box functions 
 
     setObj, getObj, maybeGetObj, removeFromObjBox, getKeysFromObjBox, 
-    getMetadata, setMetadata    
+    -- getMetadata, setMetadata    
 
 ) where
 
@@ -57,6 +62,8 @@ import Data.Store.Gruze.Types
 import qualified Data.Map as Map
 import Data.List (foldl')
 import Data.Maybe
+import Data.Typeable
+import Data.List.Split
     
 -- this is only defined for string atoms
 -- anything else will cause a run time error
@@ -335,57 +342,115 @@ maybeGetBoolList k c =
     
 -- * Gruze object getters and setters
 
+class Typeable o => GrzObjClass o where
+    getID :: o -> GrzInt
+    toObj :: o -> GrzObj
+    applyObj :: (GrzObj -> GrzObj) -> o -> o
+    replaceObj :: o -> GrzObj -> o
+    shrinkObj :: o -> o
+    isValidObj :: o -> Bool
+    getType :: o -> GrzString
+    getTimeCreated :: o -> GrzInt
+    getTimeUpdated :: o -> GrzInt
+    getContainer :: o -> GrzObj
+    getOwner :: o -> GrzObj
+    getSite :: o -> GrzObj
+    setEnabled :: Bool -> o -> o
+    isEnabled :: o -> Bool
+    getMetadata :: o -> GrzAtomBox
+    setMetadata :: o -> GrzAtomBox -> o
+
+class GrzContainerClass oc where    
+    setContainer :: GrzObjClass o => oc -> o -> o
+    
+class GrzObjClass oo => GrzOwnerClass oo where    
+    setOwner :: GrzObjClass o => oo -> o -> o
+    
+class GrzObjClass os => GrzSiteClass os where    
+    setSite :: GrzObjClass o => os -> o -> o
+       
+instance GrzObjClass GrzObj where   
+    getID (GrzObjID i) = i
+    getID obj = objID obj
+    
+    shrinkObj obj = GrzObjID (getID obj)    
+    toObj obj = obj
+    applyObj f obj = f obj
+    replaceObj obj o = applyObj (const o) obj
+    isValidObj obj = (getID obj) > 0
+    getType obj = objType obj
+    getTimeCreated obj = objTimeCreated obj
+    getTimeUpdated obj = objTimeUpdated obj
+    getContainer obj = objContainer obj
+    getOwner obj = objOwner obj
+    getSite obj = objSite obj
+    setEnabled state obj = obj { objEnabled = state }
+    isEnabled obj = objEnabled obj
+    getMetadata obj = objMetadata obj
+    setMetadata obj b = obj { objMetadata = b }
+
+instance GrzContainerClass GrzObj where         
+    setContainer container obj = replaceObj obj ((toObj obj) { objContainer = toObj container })
+    
+instance GrzOwnerClass GrzObj where         
+    setOwner owner obj = replaceObj obj ((toObj obj) { objOwner = toObj owner })
+    
+instance GrzSiteClass GrzObj where         
+    setSite site obj = replaceObj obj ((toObj obj)  { objSite = toObj site })       
+
+objWrapperToString :: (Typeable o, GrzObjClass o) => o -> String
+objWrapperToString obj = last $ splitOn "." (show $ typeOf obj)
+
+maybeConvert :: (Typeable o, GrzObjClass o) => (GrzObj -> o) -> GrzObj -> Maybe o
+maybeConvert w obj = 
+    if getType castObj == objWrapperToString castObj
+        then 
+            Just castObj 
+        else
+            Nothing
+     where castObj = w obj
+                        
+convert :: (Typeable o, GrzObjClass o) => (GrzObj -> o) -> GrzObj -> o    
+convert w obj = w $ obj { objType = objWrapperToString (w obj) }
+
+setType :: String -> GrzObj -> GrzObj        
+setType t obj = obj { objType = t }
+
 invalidObj = GrzObjID 0
 emptyObj = GrzObjFull 0 "" 0 0 invalidObj invalidObj invalidObj True Map.empty
 
-getID :: GrzObj -> Int        
-getID (GrzObjID x) = x
-getID obj = objID obj
 
-isValidObj :: GrzObj -> Bool
-isValidObj obj = (getID obj) > 0
 
-setType :: GrzString -> GrzObj -> GrzObj
-setType t obj = obj { objType = t }
 
-getType :: GrzObj -> GrzString
-getType obj = objType obj
 
-getTimeCreated :: GrzObj -> GrzInt
-getTimeCreated obj = objTimeCreated obj
 
-getTimeUpdated :: GrzObj -> GrzInt
-getTimeUpdated obj = objTimeUpdated obj
+
+
+
+
+
+
+
         
-setOwner :: GrzObj -> GrzObj -> GrzObj
-setOwner owner obj = obj { objOwner = owner }
 
-getOwner :: GrzObj -> GrzObj
-getOwner obj = objOwner obj
 
-setContainer :: GrzObj -> GrzObj -> GrzObj
-setContainer container obj = obj { objContainer = container }
 
-getContainer :: GrzObj -> GrzObj
-getContainer obj = objContainer obj
 
-setSite :: GrzObj -> GrzObj -> GrzObj
-setSite site obj = obj { objSite = site }
 
-getSite :: GrzObj -> GrzObj
-getSite obj = objSite obj
 
-setEnabled :: Bool -> GrzObj -> GrzObj
-setEnabled state obj = obj { objEnabled = state }
 
-isEnabled :: GrzObj -> Bool
-isEnabled obj = objEnabled obj
 
-getMetadata :: GrzObj -> GrzAtomBox
-getMetadata obj = objMetadata obj
 
-setMetadata :: GrzObj -> GrzAtomBox -> GrzObj
-setMetadata obj b = obj { objMetadata = b }
+
+
+
+
+
+
+
+
+
+
 
 -- * Gruze object box getters and setters
     
@@ -403,6 +468,3 @@ removeFromObjBox k c = putObjBox (Map.delete k (getObjBox c)) c
 
 getKeysFromObjBox :: GrzObjBoxClass c => c -> [GrzKey]
 getKeysFromObjBox c = Map.keys (getObjBox c)
-
-shrinkObj :: GrzObj -> GrzObj
-shrinkObj obj = GrzObjID (getID obj)

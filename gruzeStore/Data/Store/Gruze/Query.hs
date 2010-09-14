@@ -186,6 +186,7 @@ qwfItemToMaybeString grzH item =
     case item of
         GrzQDString s -> return $ Just ((s,[]),([],[]))
         GrzQDName s -> do
+                        grzLog grzH ("Processing GrzQDName " ++ s)
                         r <- maybeGetStringHandle grzH s
                         case r of
                             Just h -> return $ Just ((show $ snd h, [h]),([],[]))

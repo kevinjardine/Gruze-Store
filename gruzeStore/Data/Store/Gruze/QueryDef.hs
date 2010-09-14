@@ -1,12 +1,50 @@
-module Data.Store.Gruze.QueryDef where
+module Data.Store.Gruze.QueryDef (
+
+-- filter by specific objects
+withObjs, withObj,
+
+-- by type 
+hasTypes, hasType,
+
+-- by enabled/disabled
+hasEnabled, hasDisabled,
+
+-- by the fixed relationships
+hasOwners, hasOwner, hasContainers, hasContainer, hasSites, hasSite,
+
+-- by general relationships
+hasRels, hasRel, hasInvRels, hasInvRel,
+hasIndRel, hasInvIndRel,
+
+-- by searchable fields
+hasSearchable,
+
+-- by specific name and values
+hasStringIn, hasIntIn, hasBoolIn,
+hasStringBetween, hasIntBetween,
+hasStringOp, hasIntOp,
+
+-- has the specified names defined
+hasData,
+
+-- return objects with the given metadata in the results
+withData,
+
+-- an internal function needed by the IO module
+-- TODO: hide this
+setQueryType
+
+) where
 
 import Data.Store.Gruze.Types
 import Data.Store.Gruze.Container
 
 import Data.List (intercalate, foldl')
 import Data.Maybe
+import Data.Typeable
 
 -- TODO: add order functions
+-- TODO: restrict the export list
 
 grzMakeQueryDefName :: String -> GrzQDWFItem
 grzMakeQueryDefName s = GrzQDName s
@@ -15,27 +53,27 @@ setQueryType :: GrzQueryType -> GrzQueryDef -> GrzQueryDef
 setQueryType t (n,x) =
     (n, (GrzQDType t) : x)
 
-withObjs :: [GrzObj] -> GrzQueryDef -> GrzQueryDef  
+withObjs :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef  
 withObjs objList (n, x) =
-   (n, (GrzQDWhere ("obj.guid IN (" ++ (grzObjListToString objList) ++ ")")) : x)
+   (n, (GrzQDWhere ("obj.guid IN (" ++ (objListToString objList) ++ ")")) : x)
    
 withObj o = withObjs [o]
 
-hasOwners :: [GrzObj] -> GrzQueryDef -> GrzQueryDef   
+hasOwners :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef   
 hasOwners objList (n, x) =
-    (n, (GrzQDWhere ("obj.ownerGuid IN (" ++ (grzObjListToString objList) ++ ")")) : x)
+    (n, (GrzQDWhere ("obj.ownerGuid IN (" ++ (objListToString objList) ++ ")")) : x)
     
 hasOwner o = hasOwners [o]
 
-hasContainers :: [GrzObj] -> GrzQueryDef -> GrzQueryDef
+hasContainers :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef
 hasContainers objList (n, x) =
-    (n, (GrzQDWhere ("obj.containerGuid IN (" ++ (grzObjListToString objList) ++ ")")) : x)
+    (n, (GrzQDWhere ("obj.containerGuid IN (" ++ (objListToString objList) ++ ")")) : x)
     
 hasContainer o = hasContainers [o]
 
-hasSites :: [GrzObj] -> GrzQueryDef -> GrzQueryDef
+hasSites :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef
 hasSites objList (n, x) =
-   (n, (GrzQDWhere ("obj.siteGuid IN (" ++ (grzObjListToString objList) ++ ")")) : x)
+   (n, (GrzQDWhere ("obj.siteGuid IN (" ++ (objListToString objList) ++ ")")) : x)
    
 hasSite o = hasSites [o]
 
@@ -47,14 +85,15 @@ hasDisabled :: GrzQueryDef -> GrzQueryDef
 hasDisabled (n, x) =
     (n, (GrzQDWhere ("obj.enabled = 0")) : x)
 
-hasTypes :: [String] -> GrzQueryDef -> GrzQueryDef  
-hasTypes strList (n, x) =
-   (n, (GrzQDWhereFrags ([GrzQDString "obj.objectType IN ("] ++ [GrzQDNameList strList] 
+hasTypes :: (Typeable o, GrzObjClass o) => [GrzObj -> o] -> GrzQueryDef -> GrzQueryDef  
+hasTypes tcList (n, x) =
+   (n, (GrzQDWhereFrags ([GrzQDString "obj.objectType IN ("] 
+        ++ [GrzQDNameList (map (\y -> objWrapperToString $ (y emptyObj)) tcList)] 
         ++ [GrzQDString ")"]))  : x)
         
 hasType ot = hasTypes [ot]
 
-hasRels :: [String] -> [GrzObj] -> GrzQueryDef -> GrzQueryDef
+hasRels :: GrzObjClass o => [String] -> [o] -> GrzQueryDef -> GrzQueryDef
 hasRels rel objList (n, x) =
     (n, 
         (GrzQDWhereFrags 
@@ -62,7 +101,7 @@ hasRels rel objList (n, x) =
                 [GrzQDString 
                     ("EXISTS (SELECT guid1 FROM relationships r WHERE "
                         ++ "guid1 = obj.guid AND "
-                        ++ "guid2 IN (" ++ (grzObjListToString objList) ++ ") "
+                        ++ "guid2 IN (" ++ (objListToString objList) ++ ") "
                         ++ "AND r.relationshipType IN ("
                     )
                 ] 
@@ -73,18 +112,18 @@ hasRels rel objList (n, x) =
         
 hasRel r = hasRels [r]
         
-hasInvRels :: [String] -> [GrzObj] -> GrzQueryDef -> GrzQueryDef
+hasInvRels :: GrzObjClass o => [String] -> [o] -> GrzQueryDef -> GrzQueryDef
 hasInvRels rel objList (n, x) =
     (n, (GrzQDWhereFrags ([GrzQDString ("EXISTS (SELECT guid1 FROM "
         ++ "relationships r WHERE "
         ++ "guid2 = obj.guid AND "
-        ++ "guid1 IN (" ++ (grzObjListToString objList) ++ ") "
+        ++ "guid1 IN (" ++ (objListToString objList) ++ ") "
         ++ "AND r.relationshipType IN (")]
         ++ [GrzQDNameList rel] ++ [GrzQDString "))"])) : x)
         
 hasInvRel r = hasInvRels [r]
         
-hasInvIndRel :: String -> String -> [GrzObj] -> GrzQueryDef -> GrzQueryDef
+hasInvIndRel :: GrzObjClass o => String -> String -> [o] -> GrzQueryDef -> GrzQueryDef
 hasInvIndRel rel1 rel2 objList (n, x) =
     (n, 
         (GrzQDWhereFrags 
@@ -93,7 +132,7 @@ hasInvIndRel rel1 rel2 objList (n, x) =
                     ("EXISTS (SELECT r1.guid1 FROM relationships r1 INNER JOIN relationships r2 "
                         ++ "ON (r1.guid2 = r2.guid1) WHERE "
                         ++ "r1.guid1 = obj.guid AND "
-                        ++ "r2.guid2 IN (" ++ (grzObjListToString objList) ++ ") "
+                        ++ "r2.guid2 IN (" ++ (objListToString objList) ++ ") "
                         ++ "AND r1.relationshipType = "
                     )
                 ] 
@@ -104,7 +143,7 @@ hasInvIndRel rel1 rel2 objList (n, x) =
             )
         ) : x)
         
-hasIndRel :: String -> String -> [GrzObj] -> GrzQueryDef -> GrzQueryDef
+hasIndRel :: GrzObjClass o => String -> String -> [o] -> GrzQueryDef -> GrzQueryDef
 hasIndRel rel1 rel2 objList (n, x) =
     (n, 
         (GrzQDWhereFrags 
@@ -113,7 +152,7 @@ hasIndRel rel1 rel2 objList (n, x) =
                     ("EXISTS (SELECT r1.guid1 FROM relationships r1 INNER JOIN relationships r2 "
                         ++ "ON (r1.guid2 = r2.guid1) WHERE "
                         ++ "r2.guid2 = obj.guid AND "
-                        ++ "r1.guid1 IN (" ++ (grzObjListToString objList) ++ ") "
+                        ++ "r1.guid1 IN (" ++ (objListToString objList) ++ ") "
                         ++ "AND r1.relationshipType = "
                     )
                 ] 
@@ -133,10 +172,10 @@ hasAtomOp name op values (n, x) =
         ++ [getAtomClause values n op]))
     : x)
     
-hasAgg :: String -> GrzQueryDef -> GrzQueryDef   
-hasAgg name (n, x) =
-    (n,(GrzQDJoin ("INNER JOIN metadata ma ON (obj.guid = ma.objectGuid)")) 
-    : (GrzQDWhereFrags ([GrzQDString ("ma.nameId = ")] ++ ([GrzQDName name]) 
+hasData :: String -> GrzQueryDef -> GrzQueryDef   
+hasData name (n, x) =
+    (n+1,(GrzQDJoin ("INNER JOIN metadata m" ++ (show n) ++ " ON (obj.guid = m" ++ (show n) ++ ".objectGuid)")) 
+    : (GrzQDWhereFrags ([GrzQDString ("m"++ (show n) ++ ".nameId = ")] ++ [GrzQDName name] 
         ))
     : x)
     
@@ -177,11 +216,11 @@ withData vs (n, x) = foldl' (\(n,x) v -> (n+1,(GrzQDNeeds v n):x)) (n,x) vs
 
 -- various simple utility functions
 
-grzObjListToString :: [GrzObj] -> String
+objListToString :: GrzObjClass o => [o] -> String
 -- a bit of a kludge
-grzObjListToString [] = "-1"
-grzObjListToString x =
-    intercalate ", " (map (show . getID) x)
+objListToString [] = "-1"
+objListToString x =
+    intercalate ", " (map (show . getID . toObj) x)
 
 grzSafeAtomListToIntString :: [GrzAtom] -> String
 grzSafeAtomListToIntString x =
@@ -252,7 +291,7 @@ grzAtomListToStrings values start end =
             grzAtomListToStrings2 vs ((x ++ (show $ safeAtomToInt other) ++ ",") : xs) end
         grzAtomListToStrings2 (other : vs) [] end = 
             grzAtomListToStrings2 vs [(show $ safeAtomToInt other) ++ ","] end
-        grzAtomListToStrings2 [] (x:xs) end = ((grzTrimComma x ++end): xs)
+        grzAtomListToStrings2 [] (x:xs) end = ((grzTrimComma x ++ end): xs)
         grzAtomListToStrings2 [] [] _ = []
         
 grzMakeQueryStrings :: [String] -> String -> String -> [String]

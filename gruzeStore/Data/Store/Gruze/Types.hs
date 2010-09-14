@@ -1,7 +1,9 @@
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Data.Store.Gruze.Types where
 
 import qualified Data.Map as Map
+import Data.Typeable
 
 -- * Basic types
 
@@ -83,14 +85,8 @@ data GrzObj = GrzObjID GrzInt |
         objEnabled :: Bool,
         objMetadata :: GrzAtomBox
     }
-    deriving (Read, Show)
-    
-class ToGrzObj a where
-    toObj :: a -> GrzObj
-    
-instance ToGrzObj GrzObj where
-    toObj a = a
-    
+    deriving (Read, Show, Typeable)
+       
 instance GrzAtomBoxClass GrzObj where
     getAtomBox c = objMetadata c
     putAtomBox b c = c { objMetadata = b } 
@@ -106,8 +102,6 @@ class GrzObjBoxClass c where
 instance GrzObjBoxClass GrzObjBox where
     getObjBox c = c
     putObjBox b _ = b
-    
-
     
 -- * Gruze box definition
     
