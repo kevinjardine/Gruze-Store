@@ -354,4 +354,3 @@ grantPermission grzH obj perm role = do
 -- the role object and the permission relationship            
 hasPermission user perm =
     hasIndRel "hasRole" ("perm:" ++ perm) [user]
-    
