@@ -118,5 +118,6 @@ instance GrzObjBoxClass GrzBox where
     getObjBox c = objBox c
     putObjBox b c = c { objBox = b }
     
-  
+data GrzLogLevel = DebugLogLevel | NotificationLogLevel | WarningLogLevel | FatalLogLevel
+    deriving (Eq, Ord)
  

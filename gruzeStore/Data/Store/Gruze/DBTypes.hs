@@ -10,5 +10,7 @@ data GrzHandle = GrzHandle {
     grzDataDirectory :: FilePath,
     grzConvertLocation :: FilePath,
     grzLogFile :: FilePath,
-    grzDefaultSite :: GrzObj
+    grzDefaultSite :: GrzObj,
+    grzThumbDefs :: [(String,String)],
+    grzLogLevel :: GrzLogLevel
 }

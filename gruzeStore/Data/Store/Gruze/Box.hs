@@ -1,4 +1,4 @@
-module Data.Store.Gruze.Container (
+module Data.Store.Gruze.Box (
 
     -- constructors (note that the internals of GrzObj are not exported)
     GrzObj, GrzBox(..),

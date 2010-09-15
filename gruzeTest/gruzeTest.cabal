@@ -51,13 +51,12 @@ Executable gruzeTest
     Main-is: Main.hs
   
   -- Packages needed in order to build this package.
-    Build-depends:  base >= 4 && < 5, bytestring, gruzestore
+    Build-depends:  base >= 4 && < 5, bytestring, template-haskell, gruzestore
   
   -- Modules not exported by this package.
   -- Other-modules:       
   
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
   -- Build-tools:
-  
-  Extensions: CPP         
+      
   

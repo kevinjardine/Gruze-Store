@@ -5,7 +5,7 @@ where
 -- internal functions to convert and run query definitions
 
 import Data.Store.Gruze.Types
-import Data.Store.Gruze.Container
+import Data.Store.Gruze.Box
 import Data.Store.Gruze.DBTypes
 import Data.Store.Gruze.Handles
 import Data.Store.Gruze.Utility
@@ -121,8 +121,6 @@ grzGetQuery grzH (_, q) =
                 let qv = map snd justFrags
                 let d = concatMap (snd . fst) justFrags
                 let frags = map (fst . fst) justFrags
-                grzLog grzH ("frags: " ++ (show frags))
-                grzLog grzH ("whereBit: " ++ (show whereBit))
                 return $ Just (
                     (((prefix
                     ++ " "
@@ -186,7 +184,6 @@ qwfItemToMaybeString grzH item =
     case item of
         GrzQDString s -> return $ Just ((s,[]),([],[]))
         GrzQDName s -> do
-                        grzLog grzH ("Processing GrzQDName " ++ s)
                         r <- maybeGetStringHandle grzH s
                         case r of
                             Just h -> return $ Just ((show $ snd h, [h]),([],[]))

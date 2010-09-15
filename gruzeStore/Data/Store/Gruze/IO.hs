@@ -1,7 +1,7 @@
 module Data.Store.Gruze.IO (
     GrzHandle(..), 
     
-    grzLog, getHandle, grzCommit,
+    grzLog, getHandle, grzCommit, setDefaultSite, setThumbDefs, setLogLevel,
     
     -- query functions
     getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
@@ -23,7 +23,7 @@ module Data.Store.Gruze.IO (
 
 -- functions to manage objects, string handles and file handles
 
-import Data.Store.Gruze.Container
+import Data.Store.Gruze.Box
 import Data.Store.Gruze.Types
 import Data.Store.Gruze.QueryDef
 import Data.Store.Gruze.Handles
@@ -65,8 +65,9 @@ atomToStorageInt (GrzAtomFile s) = 3
 
 -- the Object IO functions
 
--- gets the handle
+-- handle functions
 
+-- gets the handle
 getHandle :: (GrzAtomBox -> GrzAtomBox) -> IO GrzHandle   
 getHandle c = do
     let config = c emptyAtomBox
@@ -76,9 +77,22 @@ getHandle c = do
             grzDataDirectory = getString "grzDataDirectory" "" config,
             grzConvertLocation = getString "grzConvertLocation" "" config,
             grzLogFile = getString "grzLogFile" "" config,
-            grzDefaultSite = invalidObj
+            grzDefaultSite = invalidObj,
+            grzThumbDefs = [],
+            grzLogLevel = WarningLogLevel
         }
-
+        
+setDefaultSite :: GrzSiteClass os => os -> GrzHandle -> GrzHandle
+setDefaultSite site grzH  =               
+    grzH {grzDefaultSite = toObj site}
+    
+setThumbDefs :: [(String,String)] -> GrzHandle -> GrzHandle
+setThumbDefs td grzH =               
+    grzH {grzThumbDefs = td}
+    
+setLogLevel :: GrzLogLevel -> GrzHandle -> GrzHandle
+setLogLevel level grzH =               
+    grzH {grzLogLevel = level}
         
 -- metadata handler functions
         
@@ -115,7 +129,6 @@ grzAddMetadataArray _ _ [] = return 0
 grzSetMetadataArray :: GrzHandle -> Int -> [(String,[GrzAtom])] -> IO Integer 
 grzSetMetadataArray grzH guid (d:ds) =
     do
-        -- grzLog $ "In grzSetMetadataArray, resetting array: " ++ (show (d:ds)) ++ "\n"
         h <- getStringHandle grzH (fst d)
         grzDeleteMetadata grzH guid h
         grzAddMetadata grzH guid h d
@@ -147,7 +160,7 @@ createObj grzH w p =
             objContainer = shrinkObj $ getContainer obj,
             objSite = shrinkObj $ getSite obj
         }
-        grzLog grzH $ "in createObj, created the object " ++ (show theObj) ++ "\n"
+        grzLog grzH DebugLogLevel $ "in createObj, created the object " ++ (ppObjFull theObj)
 
         -- TODO: perhaps f could return an error condition triggering a rollback?
         f <- grzAddMetadataArray grzH guid (Map.toList $ objMetadata obj)
@@ -516,9 +529,7 @@ getObjAggCount :: GrzHandle             -- ^ data handle
 getObjAggCount grzH queryDefs name =
     do
         query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggCount) . (hasData name))
-        -- grzLog $ (snd query) ++ "\n"
         result <- runQuery grzH query
-        -- grzLog $ (show result) ++ "\n"
         return $ queryResultToCount result
         
 {-|
@@ -533,12 +544,9 @@ getObjAggSumCount :: GrzHandle         -- ^ data handle
 getObjAggSumCount grzH queryDefs name =
     do
         query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggSumCount) . (hasData name))
-        grzLog grzH ("In getObjAggSumCount, " ++ (show query))
-        -- grzLog $ (snd query) ++ "\n"
         result <- runQuery grzH query
-        -- grzLog $ (show result) ++ "\n"
         return $ queryResultToSumCount result
-         
+                
 -- utilities
 
 trimWhiteSpace :: String -> String

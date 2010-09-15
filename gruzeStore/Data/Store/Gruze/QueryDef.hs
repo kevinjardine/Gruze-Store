@@ -37,7 +37,7 @@ setQueryType
 ) where
 
 import Data.Store.Gruze.Types
-import Data.Store.Gruze.Container
+import Data.Store.Gruze.Box
 
 import Data.List (intercalate, foldl')
 import Data.Maybe

@@ -1,19 +1,45 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell #-} 
 
-import Data.Store.Gruze.Container
-import Data.Store.Gruze.IO
-import Data.Store.Gruze.QueryDef
+import Data.Store.Gruze
+import Data.Store.Gruze.Templates
 
 import Data.Maybe
 import Data.Typeable
+import qualified Data.ByteString as BS
 
--- TODO: relationships should be types
--- add site, owner and container classes
+-- define some type safe wrappers
+
+-- Some experimental Template Haskell to remove the boilerplate.
+-- These definitions are here because TH requires that definitions occur
+-- before they are referenced.
+
+-- The model functions occur after main().
+
+-- sites
+
+$(defSite "Site")
+
+-- owners
+
+$(defOwner "User")
+
+-- containers
+
+$(defContainer "Collection")
+$(defContainer "Blog")
+$(defContainer "BlogPost")
+
+--other objects
+
+$(defObj "Role")
+$(defObj "Comment")
+$(defObj "Rating")
 
 main = do
 
-    {-|
+    {-
       Redefine the config parameters below to match your own MySQL and 
       file system configuration.
     -} 
@@ -44,7 +70,7 @@ main = do
             -- location of Imagemagick convert executable on file system
             -- Note: this is not used in the example below so you can
             -- set it to the empty string
-            . (setString "grzConvertLocation" "\"D:/program files/imagemagick-6.3.5-q8/convert.exe\"")
+            . (setString "grzConvertLocation" "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
         
     {-|
       This example application allows teachers to post to a special blog visible only to
@@ -59,7 +85,7 @@ main = do
     -- functions. In a more complex example, the handle could be hidden in a
     -- Reader monad or some other state monad to reduce parameter clutter          
     grzH' <- getHandle config
-    
+       
     -- delete any previous test site (and all its content)
     let testSitesQd = hasStringIn "subtype" ["grzTest"]
     testSites <- getBareObjs grzH' Site testSitesQd 0 0
@@ -74,9 +100,12 @@ main = do
     putStrLn "\nNew site created:"     
     putStrLn $ ppObj site
     
-    -- make this the default site to be used by other objects
-    let grzH = setDefaultSite grzH' site
-
+    -- set the default site, log level and the thumb definitions
+    let grzH = (setThumbDefs [("standard","80x80"),("small","32x32")])
+               . (setLogLevel DebugLogLevel)
+               . (setDefaultSite site)
+               $ grzH'
+                 
     -- make some fields searchable
     setSearchable grzH BlogPost ["title","body","tags"]
     setSearchable grzH Blog ["title"]
@@ -128,11 +157,18 @@ main = do
         ["testing","haskell","gruze"]
         Nothing
         
-    -- John edits the blog post
+    -- John edits the blog post and adds an image
+    
+    -- load the little Gruze monster image
+    s <- BS.readFile $ (grzDataDirectory grzH) ++ "/test/gruze.png"
+    
+    -- convert the image to a file atom
+    fa <- createFileAtom grzH "gruze.png" "image/png" s
     
     let edits = 
             (setString "title" "My first blog post (edited)")
             . (setString "body" "Testing the Gruze object store.")
+            . (setAtom "image" fa)
     
     -- apply edits to original post and save    
     revisedPost <- saveObj grzH (edits post)
@@ -188,36 +224,6 @@ main = do
     
     putStrLn "\nContent found by Tom's search for \"Gruze\" :"           
     mapM (putStrLn .  ppObj) tomContent
-    
--- define some type safe wrappers
-
--- some experimental simple macros to remove the boilerplate
-
-#define defSite(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzSiteClass)
-#define defContainer(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzContainerClass)
-#define defOwner(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzOwnerClass)
-#define defObj(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass)
-#define defOwnerContainer(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzOwnerClass,GrzContainerClass)
-
--- sites
-
-defSite (Site)
-
--- owners
-
-defOwner (User)
-
--- containers
-
-defContainer (Collection)
-defContainer (Blog)
-defContainer (BlogPost)
-
---other objects
-    
-defObj (Comment)
-defObj (Rating)
-defObj (Role)
 
 newtype File = File GrzAtom
   
@@ -231,10 +237,6 @@ createSite grzH subType title description =
             (setString "subtype" subType)
             . (setString "title" title)
             . (setString "description" title)
-
-setDefaultSite :: GrzHandle -> Site -> GrzHandle
-setDefaultSite grzH (Site site) =               
-    grzH {grzDefaultSite = site}
 
 -- create a user and optionally add the user to a role    
 createUser :: GrzHandle -> String -> String -> Maybe Role -> IO User

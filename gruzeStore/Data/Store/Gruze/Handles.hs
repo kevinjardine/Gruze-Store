@@ -3,7 +3,7 @@ module Data.Store.Gruze.Handles
 where
 
 import Data.Store.Gruze.Utility
-import Data.Store.Gruze.Container
+import Data.Store.Gruze.Box
 import Data.Store.Gruze.Types
 import Data.Store.Gruze.DBTypes
 
@@ -17,7 +17,7 @@ import System.Random
 import Data.Time.Clock.POSIX
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
-import System.Process (system)
+import System.Process
 import System.Exit (ExitCode)
 import System.Directory
 
@@ -56,7 +56,7 @@ maybeGetStringHandle grzH s =
         let ids = catMaybes $ map (getStringHandleFromQueryResult s) qs
         if null ids 
             then do
-                grzLog grzH ("Unable to find handle for string: " ++ s)
+                grzLog grzH NotificationLogLevel ("Unable to find handle for string: " ++ s)
                 return Nothing 
             else 
                 return $ Just (s, head ids)
@@ -85,10 +85,7 @@ makeStringHandle grzH s hash_s =
 
 -- functions to manage files
 
--- TODO: getFileData GrzHandle GrzAtom -> Maybe (String, String, String)
--- ofn, ct, loc
--- getOrphanFiles
--- delFile
+-- TODO: getOrphanFiles
 
 getFileHandle :: GrzHandle -> String -> String -> String -> String -> Int -> IO Int
 getFileHandle grzH ofn ct locd locf time = do
@@ -105,7 +102,7 @@ maybeGetFileMetadata grzH (GrzAtomFile i) = do
     where
         query = "SELECT originalName,contentType,locationDir,locationFile,timeCreated FROM files WHERE id = ?"
         
-getFileMetadata grzH _ = return Nothing
+maybeGetFileMetadata grzH _ = return Nothing
 
 maybeGetFileContent' :: GrzHandle -> GrzAtom -> String -> IO (Maybe B.ByteString)
 maybeGetFileContent' grzH a@(GrzAtomFile i) prefix = do
@@ -126,12 +123,12 @@ maybeGetFileContent' _ _ _ = return Nothing
 maybeGetFileContent :: GrzHandle -> GrzAtom -> IO (Maybe B.ByteString)
 maybeGetFileContent grzH a = maybeGetFileContent' grzH a ""
 
-maybeGetFileThumb :: GrzHandle -> GrzAtom -> IO (Maybe B.ByteString)
-maybeGetFileThumb grzH a = maybeGetFileContent' grzH a "thumb"
+maybeGetFileThumb :: GrzHandle -> String -> GrzAtom -> IO (Maybe B.ByteString)
+maybeGetFileThumb grzH s a = maybeGetFileContent' grzH a s
 
 delFile :: GrzHandle -> GrzAtom -> IO Bool
 delFile grzH a@(GrzAtomFile i) = do
-        fd <- getFileMetadata grzH a
+        fd <- maybeGetFileMetadata grzH a
         case fd of
             Just ([_,_,locd,_],_) -> do 
                                         removeDirectoryRecursive (dataDir ++ "/" ++ locd)
@@ -151,13 +148,16 @@ getFileMetadataResult :: [[SqlValue]] -> Maybe ([String],Int)
 getFileMetadataResult [[SqlNull,_,_,_]] = Nothing
 getFileMetadataResult [[ofn, ct, locd, locf, time]] = Just $ (map fromSql [ofn, ct, locd, locf], fromSql time)
 
--- a stub function for now
--- need to create a directory based on
--- uploads/yyyy/mm/dd/rrrr
--- where rrrr is a random number   
-generateFileLocationDirectory = "uploads"
+-- TODO: fix this function to make sure it cannot generate
+-- a name that already exists
+generateFileLocationDirectory dataDir d = do
+    rn <- getStdRandom (randomR (0::Int,5000))
+    let loc = "uploads/" ++ d ++ "/" ++ (show rn)
+    let dir = dataDir ++ "/" ++ loc
+    createDirectoryIfMissing True dir
+    return loc
       
-createFileAtom :: GrzHandle -> String -> String -> String -> IO GrzAtom
+createFileAtom :: GrzHandle -> String -> String -> B.ByteString -> IO GrzAtom
 createFileAtom grzH ofn ct ubs =  do
         ptime <- getPOSIXTime
         let time = floor ptime
@@ -165,33 +165,32 @@ createFileAtom grzH ofn ct ubs =  do
         h <- getFileHandle grzH ofn ct (fst loc) (snd loc) time
         return $ GrzAtomFile h
     
-saveFile :: GrzHandle -> String -> String -> String -> Int -> IO (String, String)
+saveFile :: GrzHandle -> String -> String -> B.ByteString -> Int -> IO (String, String)
 saveFile grzH ofn ct ubs time = do
-    let dataDir = grzDataDirectory grzH
+    let dataDir = grzDataDirectory grzH    
+    locd <- generateFileLocationDirectory dataDir (show time)
+    let ffn = dataDir ++ "/" ++ locd ++ "/" ++ ofn
+       
+    BS.writeFile ffn ubs
     
-    rn <- getStdRandom (randomR (0::Int,5000))
-    let loc = generateFileLocationDirectory 
-    let nfn = (show rn) 
-                ++ "_" 
-                ++ (show time) 
-                ++ "_"
-                ++ ofn
-    let ffn = dataDir ++ "/" ++ loc ++ "/" ++ nfn
-    let tfn = dataDir ++ "/" ++ loc ++ "/thumb_" ++ nfn
-    BS.writeFile ffn (B.pack ubs)
-    if (ct `elem` ["image/jpeg","image/jpg","image/gif","image/png"]) 
+    -- create thumbnails if any defined
+    if (ct `elem` ["image/jpeg","image/jpg","image/gif","image/png","image/pjpeg","image/x-png"]) 
         then do
-            c <- resizeImage grzH ffn tfn 64 64
-            -- TODO: check the exit code
+            mapM_ (resizeImage grzH (dataDir ++ "/" ++ locd) ofn) (grzThumbDefs grzH)
+            -- TODO: check the exit codes?
             return ()
         else return ()
-    return (loc, nfn)
+    return (locd, ofn)
     
-resizeImage :: GrzHandle -> FilePath -> FilePath -> Integer -> Integer -> IO ExitCode
-resizeImage grzH fn nfn w h = do
-    -- use system to run an imagemagick command
+resizeImage :: GrzHandle -> FilePath -> String -> (String,String) -> IO ExitCode
+resizeImage grzH dir ofn (tn,ts) = do
+    -- use rawSystem to run an imagemagick command
     let gcl = grzConvertLocation grzH
-    -- wrap file names in quotes (because under Windows they can have spaces)
-    let cmd = gcl ++ " \"" ++ fn ++ "\" -scale " ++ (show w) ++ "x" ++ (show h) ++ " \"" ++ nfn ++ "\""
-    grzLog grzH cmd
-    system cmd
+    let args = [dir ++ "/" ++ ofn,
+                "-scale", ts,
+                dir ++ "/" ++ tn ++ ofn
+               ]
+    grzLog grzH DebugLogLevel (show (gcl,args))
+    code <- rawSystem gcl args
+    grzLog grzH DebugLogLevel $ "Exit code: " ++ (show code)
+    return code
