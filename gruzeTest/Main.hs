@@ -151,7 +151,7 @@ main = do
         (Just studentRole)
     
     -- John posts to the teacher blog
-    post <- postBlog grzH teacherBlog john
+    post <- postBlog grzH teacherBlog john teacherRole
         "My first blog post" 
         "Testing the Gruze object stre." 
         ["testing","haskell","gruze"]
@@ -186,7 +186,7 @@ main = do
     
     rateBlogPost grzH post wendy 3
     rateBlogPost grzH post jane 5
-    commentOnBlogPost grzH post jane 
+    commentOnBlogPost grzH post jane teacherRole
         "John, thanks for checking Gruze out!"
         
     -- generate a report on the blog post response
@@ -271,11 +271,11 @@ createCollection grzH title =
             (setSite (grzDefaultSite grzH))
             . (setString "title" title)
 
--- posts to the blog and sets the permission to teachers only
-postBlog :: GrzHandle -> Blog -> User -> String -> String -> [String] -> Maybe File -> IO BlogPost
-postBlog grzH blog user title body tags image = do
+-- posts to the blog and sets the permission to the specified role
+postBlog :: GrzHandle -> Blog -> User -> Role -> String -> String -> [String] -> Maybe File -> IO BlogPost
+postBlog grzH blog user role title body tags image = do
     bp <- createObj grzH BlogPost od
-    grantPermission grzH bp "view" "teacher"
+    grantPermission grzH bp "view" role
     return bp
     where
         od =
@@ -289,11 +289,11 @@ postBlog grzH blog user title body tags image = do
                 Just (File im) -> setAtom "image" im
                 otherwise -> id
                     
--- comments on a blog post and sets the permission to teachers only
-commentOnBlogPost :: GrzHandle -> BlogPost -> User -> String -> IO Comment
-commentOnBlogPost grzH post commenter comment = do
+-- comments on a blog post and sets the permission to the specified role
+commentOnBlogPost :: GrzHandle -> BlogPost -> User -> Role -> String -> IO Comment
+commentOnBlogPost grzH post commenter role comment = do
     c <- createObj grzH Comment od
-    grantPermission grzH c "view" "teacher"
+    grantPermission grzH c "view" role
     return c
     where
         od =
@@ -304,7 +304,7 @@ commentOnBlogPost grzH post commenter comment = do
                 
 -- rates a blog post
 rateBlogPost :: GrzHandle -> BlogPost -> User -> Int -> IO ()
-rateBlogPost grzH (BlogPost post) (User rater) rating = do
+rateBlogPost grzH post rater rating = do
     createObj grzH Rating od
     return ()
     where
@@ -316,7 +316,7 @@ rateBlogPost grzH (BlogPost post) (User rater) rating = do
 
 -- searches for content that the given user has permission to see                    
 searchForContent :: GrzHandle -> User -> String -> IO [GrzObj]
-searchForContent grzH (User user) s = do
+searchForContent grzH user s = do
     getUnwrappedObjs grzH qd 0 0
     where
         qd =
@@ -340,16 +340,9 @@ addUserToRole :: GrzHandle -> User -> Role -> IO ()
 addUserToRole grzH (User user) (Role role) =
     addRel grzH "hasRole" user role
     
-grantPermission :: GrzObjClass o => GrzHandle -> o -> String -> String -> IO ()
+grantPermission :: GrzObjClass o => GrzHandle -> o -> String -> Role -> IO ()
 grantPermission grzH obj perm role = do
-    objs <- getObjs grzH Role qd 0 1
-    if (not $ null objs) && (isValidObj $ head objs)
-        then
-            addRel grzH ("perm:" ++ perm) (head objs) obj
-        else
-            return ()
-    where
-        qd = hasStringIn "title" [role]
+    addRel grzH ("perm:" ++ perm) role obj
 
 -- hasIndRel looks for indirect relationships
 -- linking the user and the object through
