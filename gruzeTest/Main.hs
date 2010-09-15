@@ -337,7 +337,7 @@ createRole grzH title description =
             . (setString "description" description)
                                
 addUserToRole :: GrzHandle -> User -> Role -> IO ()
-addUserToRole grzH (User user) (Role role) =
+addUserToRole grzH user role =
     addRel grzH "hasRole" user role
     
 grantPermission :: GrzObjClass o => GrzHandle -> o -> String -> Role -> IO ()
