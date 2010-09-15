@@ -293,7 +293,7 @@ postBlog grzH blog user title body tags image = do
 commentOnBlogPost :: GrzHandle -> BlogPost -> User -> String -> IO Comment
 commentOnBlogPost grzH post commenter comment = do
     c <- createObj grzH Comment od
-    grantPermission grzH (toObj c) "view" "teacher"
+    grantPermission grzH c "view" "teacher"
     return c
     where
         od =
