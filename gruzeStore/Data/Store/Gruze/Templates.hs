@@ -22,7 +22,7 @@ declsOwnerContainer = [d|newtype TempDecl = TempDecl GrzObj deriving (Typeable,G
 
 decl decls = do
         [d] <- decls
-        runIO $ print d -- just to show internals
+        -- runIO $ print d -- just to show internals
         return d
 
 doDef :: String -> Q [Dec] -> Q [Dec]
@@ -38,3 +38,11 @@ defContainer n = doDef n declsContainer
 defOwner n = doDef n declsOwner
 defSite n = doDef n declsSite
 defOwnerContainer n = doDef n declsOwnerContainer
+
+-- Here's a CPP alternative to the above Template Haskell approach:
+
+-- #define defSite(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzSiteClass)
+-- #define defContainer(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzContainerClass)
+-- #define defOwner(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzOwnerClass)
+-- #define defObj(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass)
+-- #define defOwnerContainer(NAME) newtype NAME = NAME GrzObj deriving (Typeable,GrzAtomBoxClass,GrzObjClass,GrzOwnerClass,GrzContainerClass)

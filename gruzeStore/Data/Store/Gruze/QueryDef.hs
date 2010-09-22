@@ -1,28 +1,31 @@
+{-# LANGUAGE TypeSynonymInstances #-}
+
 module Data.Store.Gruze.QueryDef (
 
+-- classes
+GrzQueryTypeClass(hasIn,hasBetween,hasOp),
+
+-- booleans
+hasTrue, hasFalse,
+
 -- filter by specific objects
-withObjs, withObj,
+withObj, withObjs,
 
 -- by type 
-hasTypes, hasType,
+hasType, hasTypes,
 
 -- by enabled/disabled
 hasEnabled, hasDisabled,
 
 -- by the fixed relationships
-hasOwners, hasOwner, hasContainers, hasContainer, hasSites, hasSite,
+hasOwner, hasContainer, hasSite,
+hasOwners, hasContainers, hasSites,
 
 -- by general relationships
-hasRels, hasRel, hasInvRels, hasInvRel,
-hasIndRel, hasInvIndRel,
+hasRel,
 
 -- by searchable fields
 hasSearchable,
-
--- by specific name and values
-hasStringIn, hasIntIn, hasBoolIn,
-hasStringBetween, hasIntBetween,
-hasStringOp, hasIntOp,
 
 -- has the specified names defined
 hasData,
@@ -44,175 +47,240 @@ import Data.Maybe
 import Data.Typeable
 
 -- TODO: add order functions
--- TODO: restrict the export list
+-- need order by sum, count and avg as well
 
 grzMakeQueryDefName :: String -> GrzQDWFItem
 grzMakeQueryDefName s = GrzQDName s
 
 setQueryType :: GrzQueryType -> GrzQueryDef -> GrzQueryDef
-setQueryType t (n,x) =
-    (n, (GrzQDType t) : x)
+setQueryType t ((m,n),x) =
+    ((m,n), (GrzQDType t) : x)
 
 withObjs :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef  
-withObjs objList (n, x) =
-   (n, (GrzQDWhere ("obj.guid IN (" ++ (objListToString objList) ++ ")")) : x)
+withObjs objList ((m,n), x) =
+   ((m,n), (GrzQDWhere ("obj" ++ (show m) ++ ".guid IN (" ++ (objListToString objList) ++ ")")) : x)
    
 withObj o = withObjs [o]
 
-hasOwners :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef   
-hasOwners objList (n, x) =
-    (n, (GrzQDWhere ("obj.ownerGuid IN (" ++ (objListToString objList) ++ ")")) : x)
-    
-hasOwner o = hasOwners [o]
-
-hasContainers :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef
-hasContainers objList (n, x) =
-    (n, (GrzQDWhere ("obj.containerGuid IN (" ++ (objListToString objList) ++ ")")) : x)
-    
-hasContainer o = hasContainers [o]
-
-hasSites :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef
-hasSites objList (n, x) =
-   (n, (GrzQDWhere ("obj.siteGuid IN (" ++ (objListToString objList) ++ ")")) : x)
-   
-hasSite o = hasSites [o]
-
 hasEnabled :: GrzQueryDef -> GrzQueryDef
-hasEnabled (n, x) =
-    (n, (GrzQDWhere "obj.enabled = 1") : x)
+hasEnabled ((m,n), x) =
+    ((m,n), (GrzQDWhere ("obj" ++ (show m) ++ ".enabled = 1")) : x)
 
 hasDisabled :: GrzQueryDef -> GrzQueryDef 
-hasDisabled (n, x) =
-    (n, (GrzQDWhere ("obj.enabled = 0")) : x)
+hasDisabled ((m,n), x) =
+    ((m,n), (GrzQDWhere ("obj" ++ (show m) ++ ".enabled = 0")) : x)
 
+    -- TODO inner aggregation affects the type of the result so this bit should be added
+    -- to the *outer* query I think?
+    -- perhaps have a GrzQDOuterWhereFrags ?
+    -- or for efficiency, add another inner join inside and specify the type
+    -- (eg. for the container or the owner) there?
+    -- in any case, inner aggregation needs a way to specify two types - the
+    -- type of the object being aggregated and the type of the object returned
 hasTypes :: (Typeable o, GrzObjClass o) => [GrzObj -> o] -> GrzQueryDef -> GrzQueryDef  
-hasTypes tcList (n, x) =
-   (n, (GrzQDWhereFrags ([GrzQDString "obj.objectType IN ("] 
+hasTypes tcList ((m,n), x) =
+   ((m,n), (GrzQDWhereFrags ([GrzQDString ("obj" ++ (show m) ++ ".objectType IN (")] 
         ++ [GrzQDNameList (map (\y -> objWrapperToString $ (y emptyObj)) tcList)] 
         ++ [GrzQDString ")"]))  : x)
         
 hasType ot = hasTypes [ot]
 
-hasRels :: GrzObjClass o => [String] -> [o] -> GrzQueryDef -> GrzQueryDef
-hasRels rel objList (n, x) =
-    (n, 
-        (GrzQDWhereFrags 
+refDict :: [(GrzRef,String)]
+refDict = [(ObjRef,"guid"),(ContainerRef,"containerGuid"), (OwnerRef,"ownerGuid"),(SiteRef,"siteGuid")]
+
+-- a non-public utility function to avoid writing the same code many times
+hasFixed :: GrzObjClass o => GrzRef -> [o] -> GrzQueryDef -> GrzQueryDef
+hasFixed ref objList ((m,n), x) =
+    ((m,n), (GrzQDWhere ("obj" ++ (show m) ++ "." ++ field ++ " IN (" ++ (objListToString objList) ++ ")")) : x)
+    where
+        field = fromJust $ lookup ref refDict
+
+-- the public functions
+hasOwners :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef   
+hasOwners = hasFixed OwnerRef
+    
+hasOwner o = hasOwners [o]
+
+hasContainers :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef
+hasContainers = hasFixed ContainerRef
+    
+hasContainer o = hasContainers [o]
+
+hasSites :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef
+hasSites = hasFixed SiteRef
+   
+hasSite o = hasSites [o]
+
+hasRel :: String 
+    -> GrzRelDir 
+    -> (GrzQueryDef -> GrzQueryDef)
+    -> GrzQueryDef
+    -> GrzQueryDef
+hasRel rel dir qd ((m,n), x) =
+    qd (handleOuterRel rel dir ((m,n), x))
+       
+handleOuterRel :: String
+    -> GrzRelDir    
+    -> GrzQueryDef
+    -> GrzQueryDef
+handleOuterRel rel dir ((m,n), x) =
+    ((m+1,n),
+        (GrzQDJoin ("INNER JOIN objects obj" ++ (show (m+1)) ++ " ON (r"
+            ++ (show m) ++ guidB ++ " = obj" ++ (show (m+1)) ++ ".guid)"))
+        : (GrzQDJoin ("INNER JOIN relationships r" ++ (show m) ++ " ON (r"
+            ++ (show m) ++ guidA ++ " = obj" ++ (show m) ++ ".guid)"))
+        : (GrzQDWhereFrags 
             (
                 [GrzQDString 
-                    ("EXISTS (SELECT guid1 FROM relationships r WHERE "
-                        ++ "guid1 = obj.guid AND "
-                        ++ "guid2 IN (" ++ (objListToString objList) ++ ") "
-                        ++ "AND r.relationshipType IN ("
+                    ("r" ++ (show m) ++  ".relationshipType = "
                     )
-                ] 
-                ++ [GrzQDNameList rel] 
-                ++ [GrzQDString "))"]
+                 ] 
+                ++ [GrzQDName rel] 
             )
         ) : x)
-        
-hasRel r = hasRels [r]
-        
-hasInvRels :: GrzObjClass o => [String] -> [o] -> GrzQueryDef -> GrzQueryDef
-hasInvRels rel objList (n, x) =
-    (n, (GrzQDWhereFrags ([GrzQDString ("EXISTS (SELECT guid1 FROM "
-        ++ "relationships r WHERE "
-        ++ "guid2 = obj.guid AND "
-        ++ "guid1 IN (" ++ (objListToString objList) ++ ") "
-        ++ "AND r.relationshipType IN (")]
-        ++ [GrzQDNameList rel] ++ [GrzQDString "))"])) : x)
-        
-hasInvRel r = hasInvRels [r]
-        
-hasInvIndRel :: GrzObjClass o => String -> String -> [o] -> GrzQueryDef -> GrzQueryDef
-hasInvIndRel rel1 rel2 objList (n, x) =
-    (n, 
-        (GrzQDWhereFrags 
-            (
-                [GrzQDString 
-                    ("EXISTS (SELECT r1.guid1 FROM relationships r1 INNER JOIN relationships r2 "
-                        ++ "ON (r1.guid2 = r2.guid1) WHERE "
-                        ++ "r1.guid1 = obj.guid AND "
-                        ++ "r2.guid2 IN (" ++ (objListToString objList) ++ ") "
-                        ++ "AND r1.relationshipType = "
-                    )
-                ] 
-                ++ [GrzQDName rel1] 
-                ++ [GrzQDString " AND r2.relationshipType = "]
-                ++ [GrzQDName rel2]
-                ++ [GrzQDString ")"]
-            )
-        ) : x)
-        
-hasIndRel :: GrzObjClass o => String -> String -> [o] -> GrzQueryDef -> GrzQueryDef
-hasIndRel rel1 rel2 objList (n, x) =
-    (n, 
-        (GrzQDWhereFrags 
-            (
-                [GrzQDString 
-                    ("EXISTS (SELECT r1.guid1 FROM relationships r1 INNER JOIN relationships r2 "
-                        ++ "ON (r1.guid2 = r2.guid1) WHERE "
-                        ++ "r2.guid2 = obj.guid AND "
-                        ++ "r1.guid1 IN (" ++ (objListToString objList) ++ ") "
-                        ++ "AND r1.relationshipType = "
-                    )
-                ] 
-                ++ [GrzQDName rel1] 
-                ++ [GrzQDString " AND r2.relationshipType = "]
-                ++ [GrzQDName rel2]
-                ++ [GrzQDString ")"]
-            )
-        ) : x)
+     where
+        guidA = case dir of 
+                    ForwardRel -> ".guid1"
+                    BackwardRel -> ".guid2"
+        guidB = case dir of
+                    ForwardRel -> ".guid2"
+                    BackwardRel -> ".guid1"
+    
+-- hasRel :: GrzObjClass o => 
+--     (String, GrzRelDir) 
+--     -> GrzRef 
+--     -> [o] 
+--     -> GrzQueryDef 
+--     -> GrzQueryDef
+-- hasRel (rel,dir) ref objList ((m,n), x) =
+--     ((m,n+1),
+--         (GrzQDJoin ("INNER JOIN relationships r" ++ (show m) ++ "_" ++ (show n) ++ " ON ("
+--             ++ guidA ++ " = obj" ++ (show m) ++ "." ++ field ++ ")"))
+--         : (GrzQDWhereFrags 
+--             (
+--                 [GrzQDString 
+--                     (guidB ++ " IN (" ++ (objListToString objList) ++ ") "
+--                         ++ "AND r" ++ (show m) ++ "_" ++ (show n) ++ ".relationshipType IN ("
+--                     )
+--                  ] 
+--                 ++ [GrzQDNameList [rel]] 
+--                 ++ [GrzQDString ")"]
+--             )
+--         ) : x)
+--      where
+--         field = fromJust $ lookup ref refDict
+--         guidA = case dir of 
+--                     FwdRelDir -> "guid1"
+--                     otherwise -> "guid2"
+--         guidB = case dir of
+--                     FwdRelDir -> "guid2"
+--                     otherwise -> "guid1"
+--                       
+-- hasRel2 :: GrzObjClass o => 
+--     (String, GrzRelDir) 
+--     -> (String, GrzRelDir) 
+--     -> GrzRef
+--     -> String
+--     -> [o] 
+--     -> GrzQueryDef
+--     -> GrzQueryDef
+-- hasRel2 (rel1,dir1) (rel2,dir2) ref agg objList ((m,n), x) =
+--     ((m,n+1), 
+--         (GrzQDJoin ("INNER JOIN relationships " ++ r2 ++ " ON (obj" ++ (show m) ++ "." ++ field 
+--             ++ " = " ++ r2 ++ "." ++ guidBr2 ++ ")"))
+--         : (GrzQDJoin ("INNER JOIN relationships " ++ r1 ++ " ON (" ++ r1 ++ "." 
+--             ++ guidBr1 ++ " = " ++ r2 ++ "." ++ guidAr2 ++ ")"))
+--         : (GrzQDAgg agg)
+--         : (GrzQDWhereFrags 
+--             (
+--                 [GrzQDString 
+--                     (r1 ++ "."
+--                         ++ guidAr1
+--                         ++ " IN (" ++ (objListToString objList) ++ ") "
+--                         ++ "AND " ++ r1 ++ ".relationshipType = "
+--                     )
+--                 ] 
+--                 ++ [GrzQDName rel1] 
+--                 ++ [GrzQDString (" AND " ++ r2 ++ ".relationshipType = ")]
+--                 ++ [GrzQDName rel2]
+--             )
+--         ) : x)
+--     where
+--         field = fromJust $ lookup ref refDict
+--         r1 = "r1_" ++ (show n)
+--         r2 = "r2_" ++ (show n)
+--         guidAr1 = case dir1 of
+--                     FwdRelDir -> "guid1"
+--                     otherwise -> "guid2"
+--         guidBr1 = case dir1 of
+--                     FwdRelDir -> "guid2"
+--                     otherwise -> "guid1"
+--         guidAr2 = case dir2 of
+--                     FwdRelDir -> "guid1"
+--                     otherwise -> "guid2"
+--         guidBr2 = case dir2 of
+--                     FwdRelDir -> "guid2"
+--                     otherwise -> "guid1"
    
 hasAtomOp :: String -> String -> [GrzAtom] -> GrzQueryDef -> GrzQueryDef   
-hasAtomOp name op values (n, x) =
-    (n+1,(GrzQDJoin ("INNER JOIN metadata m" ++ (show n) ++ " ON (obj.guid = m" 
-        ++ (show n) ++ ".objectGuid)")) 
-    : (GrzQDWhereFrags ([GrzQDString ("m" ++ (show n) ++ ".nameId = ")] ++ ([GrzQDName name]) 
+hasAtomOp name op values ((m,n), x) =
+    ((m,n+1),(GrzQDJoin ("INNER JOIN metadata m" ++ mbit 
+        ++ " ON (obj" ++ (show m) ++ ".guid = m" ++ mbit ++ ".objectGuid)")) 
+    : (GrzQDWhereFrags ([GrzQDString ("m" ++ mbit ++ ".nameId = ")] 
+        ++ ([GrzQDName name]) 
         ++ [GrzQDString (" AND ")]
-        ++ [getAtomClause values n op]))
+        ++ [getAtomClause values (m,n) op]))
     : x)
+    where
+        mbit = (show m) ++ "_" ++ (show n)
     
 hasData :: String -> GrzQueryDef -> GrzQueryDef   
-hasData name (n, x) =
-    (n+1,(GrzQDJoin ("INNER JOIN metadata m" ++ (show n) ++ " ON (obj.guid = m" ++ (show n) ++ ".objectGuid)")) 
-    : (GrzQDWhereFrags ([GrzQDString ("m"++ (show n) ++ ".nameId = ")] ++ [GrzQDName name] 
+hasData name ((m,n), x) =
+    ((m,n+1),(GrzQDJoin ("INNER JOIN metadata m" ++ mbit 
+        ++ " ON (obj" ++ (show m) ++ ".guid = m" ++ mbit ++ ".objectGuid)")) 
+    : (GrzQDWhereFrags ([GrzQDString ("m" ++ mbit ++ ".nameId = ")] 
+        ++ [GrzQDName name] 
         ))
     : x)
+    where
+        mbit = (show m) ++ "_" ++ (show n)
     
 hasSearchable :: String -> GrzQueryDef -> GrzQueryDef   
-hasSearchable content (n, x) =
-    (n+1,(GrzQDJoin ("INNER JOIN searchable s ON (obj.objectType = s.typeID)")) 
-    : (GrzQDJoin ("INNER JOIN metadata m" ++ (show n) ++ " ON (m" ++ (show n) ++ ".nameID = s.nameID)"))
-    : (GrzQDWhereFrags ([getAtomClause [stringToAtom content] n "match"]))
-    : (GrzQDWhere ("m" ++ (show n) ++ ".objectGuid = obj.guid"))
+hasSearchable content ((m,n), x) =
+    ((m,n+1),(GrzQDJoin ("INNER JOIN metadata m" ++ (show m) ++ "_" ++ (show n) 
+        ++ " ON (m" ++ (show m) ++ "_" ++ (show n) ++ ".nameID = s" ++ (show n) ++ ".nameID)"))
+    : (GrzQDJoin ("INNER JOIN searchable s" ++ (show n) 
+        ++ " ON (obj" ++ (show m) ++ ".objectType = s" ++ (show n) ++ ".typeID)"))
+    : (GrzQDWhereFrags ([getAtomClause [stringToAtom content] (m,n) "match"]))
+    : (GrzQDWhere ("m" ++ (show m) ++ "_" ++ (show n) ++ ".objectGuid = obj" ++ (show m) ++ ".guid"))
     : x)
 
 hasAtomIn :: String -> [GrzAtom] -> GrzQueryDef -> GrzQueryDef   
-hasAtomIn name values (n, x) = hasAtomOp name "IN" values (n, x)
+hasAtomIn name values = hasAtomOp name "IN" values
+
+class GrzQueryTypeClass qt where
+    hasIn :: GrzKey -> [qt] -> GrzQueryDef -> GrzQueryDef
+    hasBetween :: GrzKey -> (qt,qt) -> GrzQueryDef -> GrzQueryDef
+    hasOp :: GrzKey -> String -> qt -> GrzQueryDef -> GrzQueryDef
     
-hasStringIn :: String -> [GrzString] -> GrzQueryDef -> GrzQueryDef
-hasStringIn name values (n, x) = hasAtomIn name (map stringToAtom values) (n, x)
+instance GrzQueryTypeClass GrzString where
+    hasIn name values = hasAtomIn name (map stringToAtom values)
+    hasBetween name (v0,v1) = hasAtomOp name "><" (map stringToAtom [v0,v1])
+    hasOp name op value = hasAtomOp name op (map stringToAtom [value])
+    
+instance GrzQueryTypeClass GrzInt where
+    hasIn name values = hasAtomIn name (map intToAtom values)
+    hasBetween name (v0,v1) = hasAtomOp name "><" (map intToAtom [v0,v1]) 
+    hasOp name op value = hasAtomOp name op (map intToAtom [value])
+    
+hasTrue :: String -> GrzQueryDef -> GrzQueryDef
+hasTrue name = hasAtomIn name (map boolToAtom [True])
 
-hasIntIn :: String -> [GrzInt] -> GrzQueryDef -> GrzQueryDef
-hasIntIn name values (n, x) = hasAtomIn name (map intToAtom values) (n, x)
-
-hasBoolIn :: String -> [Bool] -> GrzQueryDef -> GrzQueryDef
-hasBoolIn name values (n, x) = hasAtomIn name (map boolToAtom values) (n, x)    
-        
-hasStringBetween :: String -> (GrzString,GrzString) -> GrzQueryDef -> GrzQueryDef
-hasStringBetween name (v0,v1) (n, x) = hasAtomOp name "><" (map stringToAtom [v0,v1]) (n, x)
-
-hasIntBetween :: String -> (GrzInt,GrzInt) -> GrzQueryDef -> GrzQueryDef
-hasIntBetween name (v0,v1) (n, x) = hasAtomOp name "><" (map intToAtom [v0,v1]) (n, x)
-
-hasStringOp :: String -> String -> GrzString -> GrzQueryDef -> GrzQueryDef   
-hasStringOp name op value (n, x) = hasAtomOp name op (map stringToAtom [value]) (n, x)
-
-hasIntOp :: String -> String -> GrzInt -> GrzQueryDef -> GrzQueryDef   
-hasIntOp name op value (n, x) = hasAtomOp name op (map intToAtom [value]) (n, x)
+hasFalse :: String -> GrzQueryDef -> GrzQueryDef
+hasFalse name = hasAtomIn name (map boolToAtom [False])
 
 withData :: [String] -> GrzQueryDef -> GrzQueryDef
-withData vs (n, x) = foldl' (\(n,x) v -> (n+1,(GrzQDNeeds v n):x)) (n,x) vs
+withData vs ((m,n), x) = foldl' (\((m,n),x) v -> ((m,n+1),(GrzQDNeeds v n):x)) ((m,n),x) vs
 
 -- various simple utility functions
 
@@ -220,7 +288,7 @@ objListToString :: GrzObjClass o => [o] -> String
 -- a bit of a kludge
 objListToString [] = "-1"
 objListToString x =
-    intercalate ", " (map (show . getID . toObj) x)
+    intercalate ", " (map (show . getID . unwrapObj) x)
 
 grzSafeAtomListToIntString :: [GrzAtom] -> String
 grzSafeAtomListToIntString x =
@@ -228,11 +296,11 @@ grzSafeAtomListToIntString x =
 
 -- given a list of atoms, a join number and an operation, generates appropriate where value clauses
 
-getAtomClause :: [GrzAtom] -> Int -> String -> GrzQDWFItem   
-getAtomClause atoms n op = 
+getAtomClause :: [GrzAtom] -> (Int,Int) -> String -> GrzQDWFItem   
+getAtomClause atoms (m,n) op = 
         GrzQDAtomClause valid intClause boolClause stringClause ints bools strings
     where
-        m = "m" ++ (show n)
+        mname = "m" ++ (show m) ++ "_" ++ (show n)
         intAtoms = filter isIntAtom atoms
         intMarks = intercalate "," $ map toMark intAtoms
         ints = map atomToInt intAtoms
@@ -258,13 +326,16 @@ getAtomClause atoms n op =
 
         intClause = if null ints 
                         then "" 
-                        else "(" ++ m ++ ".metadataType = 0 AND " ++ (getOpBit op (m ++ ".integerValue") intAtoms) ++ ")"
+                        else "(" ++ mname ++ ".metadataType = 0 AND " 
+                            ++ (getOpBit op (mname ++ ".integerValue") intAtoms) ++ ")"
         boolClause = if null bools 
                         then "" 
-                        else "(" ++ m ++ ".metadataType = 1 AND " ++ (getOpBit op (m ++ ".integerValue") boolAtoms)  ++ ")"
+                        else "(" ++ mname ++ ".metadataType = 1 AND " 
+                            ++ (getOpBit op (mname ++ ".integerValue") boolAtoms)  ++ ")"
         stringClause = if null strings 
                         then "" 
-                        else "(" ++ m ++ ".metadataType = 2 AND " ++ (getOpBit op (m ++ ".stringValue") stringAtoms)  ++ ")"
+                        else "(" ++ mname ++ ".metadataType = 2 AND " 
+                            ++ (getOpBit op (mname ++ ".stringValue") stringAtoms)  ++ ")"
 
 -- normalises op
 normaliseOp = [("in", "IN"),("In","IN"),("IN","IN"),("iN","IN"),("><","><") ,

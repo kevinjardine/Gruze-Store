@@ -98,20 +98,36 @@ isQueryType :: GrzQueryDefItem -> [GrzQueryType]
 isQueryType (GrzQDType t) = [t]
 isQueryType _ = []
 
+getQueryAgg :: [GrzQueryDefItem] -> String
+getQueryAgg q = case concatMap isQueryAgg q of
+                        [] -> "obj0.guid"
+                        (x:xs) -> x
+isQueryAgg :: GrzQueryDefItem -> [String]
+isQueryAgg (GrzQDAgg s) = [s]
+isQueryAgg _ = []
+
 
 -- Query IO functions
        
 grzCreateQuery :: GrzHandle -> (GrzQueryDef -> GrzQueryDef) -> IO (Maybe GrzQuery)
-grzCreateQuery grzH q = grzGetQuery grzH (q (0, []))
+grzCreateQuery grzH q = grzGetQuery grzH (q ((0,0), []))
 
 -- derives the query string, looking up any string handles in the database
 -- if any string handle lookups fail, this function returns Nothing
 -- otherwise it returns the list of need names and the actual query string
 grzGetQuery :: GrzHandle -> GrzQueryDef -> IO (Maybe GrzQuery)
-grzGetQuery grzH (_, q) =
+grzGetQuery grzH ((m,n), q) =
     do     
-        prefix <- readFile $ (grzDataDirectory grzH) ++ "/config/mysql/" ++ "prefix" ++ sqlFn
-        suffix <- readFile $ (grzDataDirectory grzH) ++ "/config/mysql/" ++ "suffix" ++ sqlFn
+        prefix' <- readFile $ (grzDataDirectory grzH) ++ "/config/mysql/" ++ "prefix" ++ sqlFn
+        suffix' <- readFile $ (grzDataDirectory grzH) ++ "/config/mysql/" ++ "suffix" ++ sqlFn
+        let prefix = prefix' 
+                        ++ if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
+                            then "" 
+                            else "SELECT " ++ agg ++ " AS guid, count(" ++ agg ++ ") FROM objects obj0 "
+        let suffix = (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
+                            then ""
+                            else " GROUP BY " ++ agg ++ " ")
+                        ++ suffix'
         maybeFrags <- grzQueryWhereFragments grzH q
         if isNothing maybeFrags
             then
@@ -124,7 +140,7 @@ grzGetQuery grzH (_, q) =
                 return $ Just (
                     (((prefix
                     ++ " "
-                    ++ (intercalate " " (getQueryJoins q))
+                    ++ (intercalate " " (reverse $ getQueryJoins q))
                     ++ (if (null whereBit) && (null frags)
                             then ""
                             else (" WHERE " 
@@ -139,6 +155,8 @@ grzGetQuery grzH (_, q) =
         whereBit = getQueryWheres q
         needs = getQueryNeeds q
         queryType = getQueryType q
+        -- agg = getQueryAgg q
+        agg = "obj" ++ (show m) ++ ".guid"
         sqlFn = case queryType of
                     GrzQTCount ->  "_query_count.sql"
                     GrzQTID ->  "_query_guid.sql"

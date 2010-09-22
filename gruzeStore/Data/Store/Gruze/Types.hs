@@ -16,7 +16,7 @@ type GrzQuery = (((String,GrzQueryType),[(String,Int)]), ([String],GrzQueryValue
 data GrzQueryType = GrzQTFull | GrzQTCount | GrzQTID | GrzQTAggCount | GrzQTAggSumCount
     deriving (Show, Eq)
 
-type GrzQueryDef = (Int, [GrzQueryDefItem])
+type GrzQueryDef = ((Int,Int), [GrzQueryDefItem])
 
 data GrzQueryDefItem = 
         GrzQDIsCount Bool 
@@ -27,6 +27,7 @@ data GrzQueryDefItem =
         | GrzQDSelect String
         | GrzQDGroup String
         | GrzQDType GrzQueryType
+        | GrzQDAgg String
 
 data GrzQDWFItem =
         GrzQDName String
@@ -120,4 +121,10 @@ instance GrzObjBoxClass GrzBox where
     
 data GrzLogLevel = DebugLogLevel | NotificationLogLevel | WarningLogLevel | FatalLogLevel
     deriving (Eq, Ord)
+    
+data GrzRelDir = ForwardRel | BackwardRel
+    deriving Eq
+    
+data GrzRef =  ObjRef | ContainerRef | OwnerRef | SiteRef
+    deriving Eq
  

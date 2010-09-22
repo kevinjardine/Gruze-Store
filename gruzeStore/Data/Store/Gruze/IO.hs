@@ -8,7 +8,7 @@ module Data.Store.Gruze.IO (
     getObjCount, getObjAggCount, getObjAggSumCount, setSearchable,
     
     -- object IO
-    createObj, saveObj, delObj,
+    createObj, saveObj, delObj, disableObj, enableObj,
     loadObj, maybeLoadObj, maybeLoadContainer, maybeLoadOwner, maybeLoadSite,
     
     -- object pretty printers    
@@ -77,14 +77,14 @@ getHandle c = do
             grzDataDirectory = getString "grzDataDirectory" "" config,
             grzConvertLocation = getString "grzConvertLocation" "" config,
             grzLogFile = getString "grzLogFile" "" config,
-            grzDefaultSite = invalidObj,
+            grzDefaultSite = emptyBareObj,
             grzThumbDefs = [],
             grzLogLevel = WarningLogLevel
         }
         
 setDefaultSite :: GrzSiteClass os => os -> GrzHandle -> GrzHandle
 setDefaultSite site grzH  =               
-    grzH {grzDefaultSite = toObj site}
+    grzH {grzDefaultSite = unwrapObj site}
     
 setThumbDefs :: [(String,String)] -> GrzHandle -> GrzHandle
 setThumbDefs td grzH =               
@@ -143,7 +143,7 @@ grzSetMetadataArray _ _ [] = return 0
 createObj :: (Typeable o, GrzObjClass o) => GrzHandle -> (GrzObj -> o) -> (GrzObj -> GrzObj) -> IO o
 createObj grzH w p =
     if null t then 
-        return (w invalidObj)
+        return (w emptyObj)
     else do
         ptime <- getPOSIXTime
         let time = floor ptime
@@ -188,7 +188,7 @@ loadObj grzH obj needs =
     do
         objs <- getUnwrappedObjs grzH qd 0 1
         return $ case objs of
-                    [] -> replaceObj obj invalidObj
+                    [] -> replaceObj obj emptyObj
                     a  -> replaceObj obj (head a)
     where
         qd = (withObjs [obj]) . (withData needs)
@@ -205,7 +205,7 @@ maybeLoadObj grzH w obj needs =
             o2 <- loadObj grzH (w obj) needs
             if isValidObj o2
                 then
-                    return $ maybeConvert w (toObj o2)
+                    return $ maybeConvert w (unwrapObj o2)
                 else
                     return Nothing           
         else
@@ -251,23 +251,30 @@ saveObj grzH o =
         grzCommit grzH
         return $ replaceObj o theObj
     where
-        obj = toObj o
+        obj = unwrapObj o
         guid = getID obj
         enabled = if isEnabled obj then 1 else 0
         siteID = getID $ getSite obj
         ownerID = getID $ getOwner obj
         containerID = getID $ getContainer obj
-        query = "UPDATE objects set ownerGuid = ?, containerGuid = ?, siteGuid = ?, timeUpdated = ? WHERE guid = ?"
+        query = "UPDATE objects SET ownerGuid = ?, containerGuid = ?, siteGuid = ?, timeUpdated = ? WHERE guid = ?"
 
 {-|
-  delObj deletes all the object data including metadata and relationships and then recursively
+  delObj deletes all the object data including metadata and relationships and recursively
   deletes all the objects that have this object as a container, owner or site.
   
-  TODO: add a version that allows providing a function to do something before an event is deleted.
+  TODO: add a version that allows providing a function to do something before an object is deleted.
 -} 
 
 delObj :: GrzObjClass o => GrzHandle -> o -> IO Bool
-delObj grzH obj = delObjByID grzH (getID $ toObj obj)
+delObj grzH obj = do
+    r <- delObjByID grzH (getID obj)
+    if r
+        then do
+            grzCommit grzH
+            return r
+        else
+            return r
 
 delObjByID :: GrzHandle -> Int -> IO Bool
 delObjByID grzH 0 = return True
@@ -294,21 +301,66 @@ delObjByID grzH guid =
         -- delete the object from the object table
         grzQuery grzH object_query $ [toSql guid]
         
-        -- all done, so commit the result
-        -- TODO: this will result in deleting some but not all related
-        -- objects in case of a failure
-        -- should perhaps the commit be at a higher level
-        -- so that delete is all or none?
-        grzCommit grzH
-        
         return True
     where
         metadata_query = "DELETE FROM metadata WHERE objectGuid = ?"
         relationship_query = "DELETE FROM relationships WHERE guid1 = ? OR guid2 = ?"
         object_query = "DELETE FROM objects WHERE guid = ?"
         
+setEnableObj :: GrzObjClass o => GrzHandle -> Bool -> o -> IO Bool
+setEnableObj grzH state obj  = do
+    r <- setEnableObjByID grzH (if state then 1 else 0) (getID obj) 
+    if r
+        then do
+            grzCommit grzH
+            return r
+        else
+            return r
+
+setEnableObjByID :: GrzHandle -> Int -> Int -> IO Bool
+setEnableObjByID grzH _ 0 = return True
+setEnableObjByID grzH state guid  =
+    do
+        
+        -- set the enable state on the owned objects
+        owned <- getObjIDs grzH (hasOwners [GrzObjID guid]) 0 0
+        mapM_ (setEnableObjByID grzH state) owned
+        
+        -- set the enable state on the contained objects
+        contained <- getObjIDs grzH (hasContainers [GrzObjID guid]) 0 0
+        mapM_ (setEnableObjByID grzH state) contained
+        
+        -- set the enable state on the objects that have this object as a site
+        sited <- getObjIDs grzH (hasSites [GrzObjID guid]) 0 0
+        mapM_ (setEnableObjByID grzH state) sited
+        
+        -- set the enable state on the object itself
+        grzQuery grzH object_query $ [toSql state, toSql guid]       
+        
+        return True
+    where
+        object_query = "UPDATE objects SET enabled = ? WHERE guid = ?"
+
+{-|
+  disableObj disables the object and recursively disables all the objects that
+  have this object as a container, owner or site.
+  
+  TODO: add a version that allows providing a function to do something before
+  an object is disabled.
+-}         
+disableObj grzH obj = setEnableObj grzH False obj
+
+{-|
+  enableObj enables the object and recursively enables all the objects that
+  have this object as a container, owner or site.
+  
+  TODO: add a version that allows providing a function to do something before
+  an object is enabled.
+-}    
+enableObj grzH obj = setEnableObj grzH True obj
+        
 ppObj :: GrzObjClass o => o -> String
-ppObj = ppObj' . toObj
+ppObj = ppObj' . unwrapObj
 
 ppObj' :: GrzObj -> String
 ppObj' (GrzObjID i) = "object " ++ (show i)
@@ -318,7 +370,7 @@ ppObj' obj = "object "
                 ++ "]"
 
 ppObjFull :: GrzObjClass o => o -> String
-ppObjFull = ppObjFull' . toObj
+ppObjFull = ppObjFull' . unwrapObj
 
 ppObjFull' :: GrzObj -> String
 ppObjFull' (GrzObjID i) = "object " ++ (show i)

@@ -12,13 +12,14 @@ module Data.Store.Gruze.Box (
     GrzAtom, GrzAtomBox, GrzObjBox, GrzInt, GrzString, GrzKey,
 
     -- atom converters
-    atomToString, maybeAtomToString, safeAtomToString, ppAtom, stringToAtom, isStringAtom,
+    atomToString, maybeAtomToString, safeAtomToString, forceAtomToString, 
+    ppAtom, stringToAtom, isStringAtom,
     atomToInt, maybeAtomToInt, safeAtomToInt, intToAtom, isIntAtom,
     atomToBool, maybeAtomToBool, boolToAtom, isBoolAtom,
     atomToFileID, maybeAtomToFileID, isFileAtom,
     
     -- special object constructors
-    emptyObj, invalidObj,
+    emptyObj, emptyBareObj,
     
     -- object setter (setType is only allowed for generic GrzObjs)    
     setType,
@@ -54,7 +55,13 @@ module Data.Store.Gruze.Box (
     -- object box functions 
 
     setObj, getObj, maybeGetObj, removeFromObjBox, getKeysFromObjBox, 
-    -- getMetadata, setMetadata    
+    -- getMetadata, setMetadata
+    
+    -- rexport some basic modules
+    
+    module Data.Maybe,
+    module Data.Typeable,
+    module Data.List.Split   
 
 ) where
 
@@ -82,6 +89,14 @@ safeAtomToString (GrzAtomBool True) = ""
 safeAtomToString (GrzAtomBool False) = ""
 safeAtomToString (GrzAtomString a) = a
 safeAtomToString (GrzAtomFile a) = ""
+
+-- another safe version that converts everything
+forceAtomToString :: GrzAtom -> GrzString  
+forceAtomToString (GrzAtomInt a) = show a
+forceAtomToString (GrzAtomBool True) = "True"
+forceAtomToString (GrzAtomBool False) = "False"
+forceAtomToString (GrzAtomString a) = a
+forceAtomToString (GrzAtomFile a) = "File " ++ (show a)
 
 -- another safe version that converts everything    
 ppAtom :: GrzAtom -> GrzString  
@@ -344,7 +359,7 @@ maybeGetBoolList k c =
 
 class Typeable o => GrzObjClass o where
     getID :: o -> GrzInt
-    toObj :: o -> GrzObj
+    unwrapObj :: o -> GrzObj
     applyObj :: (GrzObj -> GrzObj) -> o -> o
     replaceObj :: o -> GrzObj -> o
     shrinkObj :: o -> o
@@ -360,7 +375,7 @@ class Typeable o => GrzObjClass o where
     getMetadata :: o -> GrzAtomBox
     setMetadata :: o -> GrzAtomBox -> o
 
-class GrzContainerClass oc where    
+class GrzObjClass oc => GrzContainerClass oc where    
     setContainer :: GrzObjClass o => oc -> o -> o
     
 class GrzObjClass oo => GrzOwnerClass oo where    
@@ -374,7 +389,7 @@ instance GrzObjClass GrzObj where
     getID obj = objID obj
     
     shrinkObj obj = GrzObjID (getID obj)    
-    toObj obj = obj
+    unwrapObj obj = obj
     applyObj f obj = f obj
     replaceObj obj o = applyObj (const o) obj
     isValidObj obj = (getID obj) > 0
@@ -390,13 +405,13 @@ instance GrzObjClass GrzObj where
     setMetadata obj b = obj { objMetadata = b }
 
 instance GrzContainerClass GrzObj where         
-    setContainer container obj = replaceObj obj ((toObj obj) { objContainer = toObj container })
+    setContainer container obj = replaceObj obj ((unwrapObj obj) { objContainer = unwrapObj container })
     
 instance GrzOwnerClass GrzObj where         
-    setOwner owner obj = replaceObj obj ((toObj obj) { objOwner = toObj owner })
+    setOwner owner obj = replaceObj obj ((unwrapObj obj) { objOwner = unwrapObj owner })
     
 instance GrzSiteClass GrzObj where         
-    setSite site obj = replaceObj obj ((toObj obj)  { objSite = toObj site })       
+    setSite site obj = replaceObj obj ((unwrapObj obj)  { objSite = unwrapObj site })       
 
 objWrapperToString :: (Typeable o, GrzObjClass o) => o -> String
 objWrapperToString obj = last $ splitOn "." (show $ typeOf obj)
@@ -416,8 +431,8 @@ convert w obj = w $ obj { objType = objWrapperToString (w obj) }
 setType :: String -> GrzObj -> GrzObj        
 setType t obj = obj { objType = t }
 
-invalidObj = GrzObjID 0
-emptyObj = GrzObjFull 0 "" 0 0 invalidObj invalidObj invalidObj True Map.empty
+emptyBareObj = GrzObjID 0
+emptyObj = GrzObjFull 0 "" 0 0 emptyBareObj emptyBareObj emptyBareObj True emptyAtomBox
 
 
 

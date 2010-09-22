@@ -5,8 +5,6 @@
 import Data.Store.Gruze
 import Data.Store.Gruze.Templates
 
-import Data.Maybe
-import Data.Typeable
 import qualified Data.ByteString as BS
 
 -- define some type safe wrappers
@@ -37,6 +35,13 @@ $(defObj "Role")
 $(defObj "Comment")
 $(defObj "Rating")
 
+{-|
+      This example application allows teachers to post to a special blog visible only to
+      teachers and not students. Gruze does not provide one standard access control system
+      but as the example below shows, you can easily create one using role objects and 
+      permission relationships.
+-} 
+
 main = do
 
     {-
@@ -64,20 +69,12 @@ main = do
             . (setString "grzDataDirectory" "D:/projects/haskell/storedata")
             
             -- location of log file on file system (must be writable by Haskell)
-            -- currently Gruze logs a lot of information (generated queries etc.)
+            -- at debug level (used in the example code below), Gruze logs a lot of 
+            -- information (generated queries, object creation notices etc.)
             . (setString "grzLogFile" "D:/projects/haskell/newlog2.txt")
             
             -- location of Imagemagick convert executable on file system
-            -- Note: this is not used in the example below so you can
-            -- set it to the empty string
             . (setString "grzConvertLocation" "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
-        
-    {-|
-      This example application allows teachers to post to a special blog visible only to
-      teachers and not students. Gruze does not provide one standard access control system
-      but as the example below shows, you can easily create one using role objects and 
-      permission relationships.
-    -} 
                 
     -- get handle (which opens the database connection)
     
@@ -87,7 +84,7 @@ main = do
     grzH' <- getHandle config
        
     -- delete any previous test site (and all its content)
-    let testSitesQd = hasStringIn "subtype" ["grzTest"]
+    let testSitesQd = hasIn "subtype" ["grzTest"]
     testSites <- getBareObjs grzH' Site testSitesQd 0 0
     mapM_ (delObj grzH') testSites
     
@@ -150,7 +147,7 @@ main = do
         "tom@example.com"
         (Just studentRole)
     
-    -- John posts to the teacher blog
+    -- John posts to the teacher blog and sets view access to the teacherRole
     post <- postBlog grzH teacherBlog john teacherRole
         "My first blog post" 
         "Testing the Gruze object stre." 
@@ -165,12 +162,18 @@ main = do
     -- convert the image to a file atom
     fa <- createFileAtom grzH "gruze.png" "image/png" s
     
+    -- the following shows how to do a quick change to an object outside
+    -- of an accessor function
+    
+    -- Note: doing this outside of an accessor function is
+    -- easy but is not type safe and so is discouraged
+    
     let edits = 
             (setString "title" "My first blog post (edited)")
             . (setString "body" "Testing the Gruze object store.")
             . (setAtom "image" fa)
     
-    -- apply edits to original post and save    
+    -- apply edits to original post and save 
     revisedPost <- saveObj grzH (edits post)
         
     putStrLn "\nNew blog post created, full output:"           
@@ -201,13 +204,19 @@ main = do
         ((hasType Rating)
         . (hasContainer post))
         "value"
-        
+    
+    let avgRating = if (snd r) == 0 
+                        then 
+                            "No ratings yet" 
+                        else 
+                            show $ (fst r) `quot` (snd r)
+                            
     putStrLn $ "Report on John's blog post:\nNumber of comments: " 
         ++ (show commentCount)
         ++ "\nNumber of ratings: "
         ++ (show $ snd r)
         ++ "\nAverage rating: "
-        ++ (show $ ((fst r) `quot` (snd r)))
+        ++ avgRating
     
     -- when searching, Tom cannot find the same content as John
     -- because students and teachers have different roles
@@ -227,7 +236,7 @@ main = do
 
 newtype File = File GrzAtom
   
--- model functions
+-- object creation and accessor functions
 
 createSite :: GrzHandle -> String -> String -> String -> IO Site
 createSite grzH subType title description =
@@ -275,7 +284,7 @@ createCollection grzH title =
 postBlog :: GrzHandle -> Blog -> User -> Role -> String -> String -> [String] -> Maybe File -> IO BlogPost
 postBlog grzH blog user role title body tags image = do
     bp <- createObj grzH BlogPost od
-    grantPermission grzH bp "view" role
+    grantPermission grzH bp "View" role
     return bp
     where
         od =
@@ -293,7 +302,7 @@ postBlog grzH blog user role title body tags image = do
 commentOnBlogPost :: GrzHandle -> BlogPost -> User -> Role -> String -> IO Comment
 commentOnBlogPost grzH post commenter role comment = do
     c <- createObj grzH Comment od
-    grantPermission grzH c "view" role
+    grantPermission grzH c "View" role
     return c
     where
         od =
@@ -313,15 +322,18 @@ rateBlogPost grzH post rater rating = do
             . (setOwner rater)
             . (setContainer post)
             . (setInt "value" rating)
-
--- searches for content that the given user has permission to see                    
+            
+-- an example generic search function
+-- searches for enabled content that the given user has permission to see
+-- as the types are unclear, returns unwrapped objects                    
 searchForContent :: GrzHandle -> User -> String -> IO [GrzObj]
 searchForContent grzH user s = do
     getUnwrappedObjs grzH qd 0 0
     where
-        qd =
-            (hasPermission user "view")
-            . (hasSearchable s)
+        qd = hasPermission user "View" ((hasSearchable s) . (hasEnabled))
+
+            
+-- Roles and permissions
             
 -- in the simple roles and permissions system created below,
 -- users are associated with a number of possible roles and
@@ -342,10 +354,12 @@ addUserToRole grzH user role =
     
 grantPermission :: GrzObjClass o => GrzHandle -> o -> String -> Role -> IO ()
 grantPermission grzH obj perm role = do
-    addRel grzH ("perm:" ++ perm) role obj
+    addRel grzH ("hasPerm" ++ perm) role obj
 
--- hasIndRel looks for indirect relationships
+-- looks for indirect relationships
 -- linking the user and the object through
--- the role object and the permission relationship            
-hasPermission user perm =
-    hasIndRel "hasRole" ("perm:" ++ perm) [user]
+-- the role object and the permission relationship
+hasPermission :: User -> String -> (GrzQueryDef -> GrzQueryDef) -> GrzQueryDef -> GrzQueryDef            
+hasPermission user perm qd =
+    (hasRel "hasRole" ForwardRel (hasRel ("hasPerm" ++ perm) ForwardRel qd))
+    . (withObj user)

@@ -10,19 +10,20 @@ module Data.Store.Gruze (
     -- classes
     
     GrzObjClass(..), GrzContainerClass(..), GrzOwnerClass(..), GrzSiteClass(..),
-    GrzAtomBoxClass(..),
+    GrzAtomBoxClass(..), 
     
     -- types
     GrzAtom, GrzAtomBox, GrzObjBox, GrzInt, GrzString, GrzKey, GrzLogLevel(..),
 
     -- atom converters
-    atomToString, maybeAtomToString, safeAtomToString, ppAtom, stringToAtom,
-    isStringAtom, atomToInt, maybeAtomToInt, safeAtomToInt, intToAtom, 
-    isIntAtom, atomToBool, maybeAtomToBool, boolToAtom, isBoolAtom,
+    atomToString, maybeAtomToString, safeAtomToString, forceAtomToString, 
+    ppAtom, stringToAtom, isStringAtom,
+    atomToInt, maybeAtomToInt, safeAtomToInt, intToAtom, isIntAtom,
+    atomToBool, maybeAtomToBool, boolToAtom, isBoolAtom,
     atomToFileID, maybeAtomToFileID, isFileAtom,
     
     -- special object constructors
-    emptyObj, invalidObj,
+    emptyObj, emptyBareObj,
     
     -- object setter (setType is only allowed for unwrapped GrzObjs)    
     setType,
@@ -65,29 +66,35 @@ module Data.Store.Gruze (
     
     -- object query API
     
+    -- types
+    GrzQueryDef, GrzRelDir(..), GrzRef(..),
+    
+    -- classes
+    GrzQueryTypeClass(hasIn,hasBetween,hasOp),
+    
+    -- booleans
+    hasTrue, hasFalse,
+    
     -- filter by specific objects
-    withObjs, withObj,
+    withObj, withObjs,
     
     -- by type 
-    hasTypes, hasType,
+    hasType, hasTypes,
     
     -- by enabled/disabled
     hasEnabled, hasDisabled,
     
     -- by the fixed relationships
-    hasOwners, hasOwner, hasContainers, hasContainer, hasSites, hasSite,
+    hasOwner, hasContainer, hasSite,
+    hasOwners, hasContainers, hasSites,
     
     -- by general relationships
-    hasRels, hasRel, hasInvRels, hasInvRel, hasIndRel, hasInvIndRel,
+    hasRel,
     
     -- by searchable fields
     hasSearchable,
     
-    -- by specific name and values
-    hasStringIn, hasIntIn, hasBoolIn, hasStringBetween, hasIntBetween,
-    hasStringOp, hasIntOp,
-    
-    -- has the specified names defined
+    -- has the specified metadata names defined
     hasData,
     
     -- return objects with the given metadata in the results
@@ -105,15 +112,21 @@ module Data.Store.Gruze (
     getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
     getObjCount, getObjAggCount, getObjAggSumCount, setSearchable,
     
-    -- create, save and load
-    createObj, saveObj, delObj,
+    -- create, save, delete, disable, enable and load
+    createObj, saveObj, delObj, disableObj, enableObj,
     loadObj, maybeLoadObj, maybeLoadContainer, maybeLoadOwner, maybeLoadSite,
 
     -- file handler
     createFileAtom, maybeGetFileMetadata, maybeGetFileContent, maybeGetFileThumb,
     
     -- relationship IO
-    addRel, delRel, checkRel
+    addRel, delRel, checkRel,
+    
+    -- rexport some basic modules
+    
+    module Data.Maybe,
+    module Data.Typeable,
+    module Data.List.Split 
     
 ) where
 
@@ -122,3 +135,7 @@ import Data.Store.Gruze.IO
 import Data.Store.Gruze.QueryDef
 import Data.Store.Gruze.Utility
 import Data.Store.Gruze.Types
+
+import Data.Maybe
+import Data.Typeable
+import Data.List.Split
