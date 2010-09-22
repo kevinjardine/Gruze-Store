@@ -189,8 +189,22 @@ main = do
     
     rateBlogPost grzH post wendy 3
     rateBlogPost grzH post jane 5
-    commentOnBlogPost grzH post jane teacherRole
+    janeComment <- commentOnBlogPost grzH post jane teacherRole
         "John, thanks for checking Gruze out!"
+        
+    -- Get the container of the container of Jane's Comment,
+    -- which should be a Blog.
+    -- This shows how to do queries with one of the special relationships.
+    -- Notice that the withObj invocation occurs first (bottom) because it refers
+    -- to the comment and the withData invocation occurs last (top) because
+    -- it refers to the Blog
+    putStrLn "\nContainer of the container of Jane's comment:" 
+    let ccqd = (withData ["title"])
+                . (hasRel "+hasContainer") 
+                . (hasRel "+hasContainer") 
+                . (withObj janeComment)
+    rc <- getObjs grzH Blog ccqd 0 0
+    mapM (putStrLn . ppObjFull) rc
         
     -- generate a report on the blog post response
     
@@ -361,5 +375,7 @@ grantPermission grzH obj perm role = do
 -- the role object and the permission relationship
 hasPermission :: User -> String -> (GrzQueryDef -> GrzQueryDef) -> GrzQueryDef -> GrzQueryDef            
 hasPermission user perm qd =
-    (hasRel "hasRole" ForwardRel (hasRel ("hasPerm" ++ perm) ForwardRel qd))
+    qd
+    . (hasRel $ "+hasPerm" ++ perm)
+    . (hasRel "+hasRole")
     . (withObj user)

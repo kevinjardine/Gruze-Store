@@ -112,18 +112,54 @@ hasSites = hasFixed SiteRef
 hasSite o = hasSites [o]
 
 hasRel :: String 
-    -> GrzRelDir 
-    -> (GrzQueryDef -> GrzQueryDef)
     -> GrzQueryDef
     -> GrzQueryDef
-hasRel rel dir qd ((m,n), x) =
-    qd (handleOuterRel rel dir ((m,n), x))
-       
-handleOuterRel :: String
+hasRel rel =
+    if isSpecial rel'
+        then handleRelSpecial rel' dir
+        else handleRel rel' dir
+    where
+        dir = if null rel
+                then ForwardRel
+                else if head rel == '-'
+                        then BackwardRel
+                        else ForwardRel
+        rel' = if null rel
+                then rel
+                else if (head rel) `elem` ['-','+']
+                        then tail rel
+                        else rel
+        isSpecial rel = rel `elem` ["hasContainer","hasOwner","hasSite"]
+
+-- the three special relationships: hasContainer, hasOwner and hasSite
+-- can be implemented without the relationship table and so
+-- can avoid a join
+handleRelSpecial :: String
     -> GrzRelDir    
     -> GrzQueryDef
     -> GrzQueryDef
-handleOuterRel rel dir ((m,n), x) =
+handleRelSpecial rel dir ((m,n), x) =
+    ((m+1,n),
+        (GrzQDJoin ("INNER JOIN objects obj" ++ (show (m+1)) ++ " ON (obj"
+            ++ (show m) ++ guidA ++ " = obj" ++ (show (m+1)) ++ guidB ++ ")"))
+         : x)
+    where
+        field = case rel of
+                    "hasContainer" -> ".containerGuid"
+                    "hasOwner" -> ".ownerGuid"
+                    "hasSite" -> ".siteGuid"
+        guidA = case dir of 
+                    ForwardRel -> field
+                    BackwardRel -> ".guid"
+        guidB = case dir of
+                    ForwardRel -> ".guid"
+                    BackwardRel -> field
+   
+handleRel :: String
+    -> GrzRelDir    
+    -> GrzQueryDef
+    -> GrzQueryDef
+handleRel rel dir ((m,n), x) =
     ((m+1,n),
         (GrzQDJoin ("INNER JOIN objects obj" ++ (show (m+1)) ++ " ON (r"
             ++ (show m) ++ guidB ++ " = obj" ++ (show (m+1)) ++ ".guid)"))

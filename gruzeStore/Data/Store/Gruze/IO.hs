@@ -502,7 +502,7 @@ getObjs :: GrzObjClass o =>
     -> IO [o]                           -- ^ list of objects
 getObjs grzH w queryDefs offset limit =
     do
-        query <- grzCreateQuery grzH (queryDefs . (hasType w))
+        query <- grzCreateQuery grzH ((hasType w) . queryDefs)
         result <- runQuery grzH $ (addToQuery (addToQuery query orderBit) limitBit) 
         return $ map w (queryResultToObjs result)
     where
@@ -540,7 +540,7 @@ getBareObjs :: GrzObjClass o =>
     -> Int                              -- ^ limit (number of objects to return)
     -> IO [o]                           -- ^ list of objects
 getBareObjs grzH w queryDefs offset limit = 
-    fmap (map (w . GrzObjID) ) (getObjIDs grzH (queryDefs . (hasType w)) offset limit)
+    fmap (map (w . GrzObjID) ) (getObjIDs grzH ((hasType w) . queryDefs) offset limit)
 
 {-|
   getUnwrappedBareObjs runs a query definition and retrieves a list of unwrapped
