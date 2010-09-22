@@ -153,7 +153,7 @@ main = do
     -- John posts to the teacher blog and sets view access to the teacherRole
     post <- postBlog grzH teacherBlog john teacherRole
         "My first blog post" 
-        "Testing the Gruze object stre." 
+        "Testing the object stre." 
         ["testing","haskell","gruze"]
         Nothing
         
@@ -165,25 +165,24 @@ main = do
     -- convert the image to a file atom
     fa <- createFileAtom grzH "gruze.png" "image/png" s
     
-    -- the following shows how to do a quick change to an object outside
-    -- of an accessor function
+    -- The following shows how to do a quick change to an object outside
+    -- of an accessor function.
     
-    -- Note: doing this outside of an accessor function is
-    -- easy but is not type safe and so is discouraged
+    -- The example changes the title and description and adds an image.
     
     let edits = 
             (setString "title" "My first blog post (edited)")
-            . (setString "body" "Testing the Gruze object store.")
+            . (setString "body" "Testing the object store.")
             . (setAtom "image" fa)
     
-    -- apply edits to original post and save 
+    -- Apply edits to original post and save. 
     revisedPost <- saveObj grzH (edits post)
         
     putStrLn "\nNew blog post created, full output:"           
     putStrLn $ ppObjFull revisedPost
     
-    -- load the owner object including the name field
-    -- not all objects have owners so this is a maybe
+    -- Load and display the owner object including the name field.
+    -- Not all objects have owners so this is a maybe.
     postOwner <- maybeLoadOwner grzH User revisedPost ["name"]
     
     putStrLn $ "Blog post owner: " ++ (fromMaybe "" $ fmap ppObjFull postOwner)              
@@ -200,7 +199,7 @@ main = do
     
     -- This shows how to do queries with one of the special relationships.
     -- Notice that the withObj invocation occurs first (bottom) because it
-    -- refers to the comment and the withData invocation occurs last (top)
+    -- refers to the Comment and the withData invocation occurs last (top)
     -- because it refers to the Blog
     putStrLn "\nContainer of the container of Jane's comment:" 
     let ccqd = (withData ["title"])
@@ -210,14 +209,15 @@ main = do
     rc <- getObjs grzH Blog ccqd 0 0
     mapM (putStrLn . ppObjFull) rc
     
-    -- Another query example, this time getting all the high ratings (>= 4) 
+    -- Another query example, this time getting all the high Ratings (>= 4) 
     -- for John's BlogPost.
+    
     -- Notice the reverse "-hasContainer" relationship, which gets all the
     -- objects within a container.
     
     putStrLn "\nAll high ratings of John's blog post:" 
     let ccqd = (withData ["value"])
-                . (hasOp "value" ">=" 4 )
+                . (hasOp "value" ">=" 4)
                 . (hasRel "-hasContainer") 
                 . (withObj post)
     rc <- getObjs grzH Rating ccqd 0 0
@@ -225,12 +225,12 @@ main = do
         
     -- generate a report on the blog post response
     
-    -- get the number of comments
+    -- get the number of Comments
     commentCount <- getObjCount grzH
         ((hasType Comment)
         . (hasContainer post))
     
-    -- get the sum and count of the value field of the relevant ratings        
+    -- get the sum and count of the value field of the relevant Ratings        
     r <- getObjAggSumCount grzH
         ((hasType Rating)
         . (hasContainer post))
@@ -248,16 +248,29 @@ main = do
         ++ (show $ snd r)
         ++ "\nAverage rating: "
         ++ avgRating
+        
+    -- an example of per object aggregation
+    -- In this case, we are listing all blog posts and
+    -- a sum and count of the ratings each has
     
-    -- when searching, Tom cannot find the same content as John
-    -- because students and teachers have different roles
+    putStrLn $ "\nPer object aggregation example (sum and count of ratings per blog post): "
     
-    -- since seatchForContent does not know in advance what
-    -- content will be returned, these are unwrapped objects
+    raboc <- getObjAggByObjSumCount grzH "value" Rating BlogPost
+                ((hasRel "-hasContainer"))
+            
+    putStrLn $ concatMap (\(o,(s,c)) -> 
+                ("(" ++ (ppObj o) ++ "," ++ (show s) ++ "," ++ (show c) ++ ")\n")
+            ) raboc
+    
+    -- When searching, Tom cannot find the same content as John
+    -- because students and teachers have different roles.
+    
+    -- Since searchForContent does not know in advance what
+    -- content will be returned, these are unwrapped objects.
         
     johnContent <- searchForContent grzH john "Gruze"
     
-    putStrLn "\nContent found by John's search for \"Gruze\" :"           
+    putStrLn "Content found by John's search for \"Gruze\" :"           
     mapM (putStrLn .  ppObj) johnContent
     
     tomContent <- searchForContent grzH tom "Gruze"

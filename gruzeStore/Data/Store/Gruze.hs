@@ -110,7 +110,8 @@ module Data.Store.Gruze (
     
     -- query functions
     getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
-    getObjCount, getObjAggCount, getObjAggSumCount, setSearchable,
+    getObjCount, getObjAggCount, getObjAggSumCount, getObjAggByObjCount,
+    getObjAggByObjSumCount, setSearchable,
     
     -- create, save, delete, disable, enable and load
     createObj, saveObj, delObj, disableObj, enableObj,

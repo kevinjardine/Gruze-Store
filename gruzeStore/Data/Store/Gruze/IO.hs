@@ -5,7 +5,8 @@ module Data.Store.Gruze.IO (
     
     -- query functions
     getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
-    getObjCount, getObjAggCount, getObjAggSumCount, setSearchable,
+    getObjCount, getObjAggCount, getObjAggSumCount, getObjAggByObjCount, 
+    getObjAggByObjSumCount, setSearchable,
     
     -- object IO
     createObj, saveObj, delObj, disableObj, enableObj,
@@ -573,6 +574,7 @@ getObjCount grzH queryDefs =
 {-|
   The 'getObjAggCount' function takes a query definition and a metadata name.
   It retrieves a count of objects from the database that have metadata with that name.
+  TODO: get rid of this function as it is redundant.
 -}        
 getObjAggCount :: GrzHandle             -- ^ data handle
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
@@ -583,6 +585,51 @@ getObjAggCount grzH queryDefs name =
         query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggCount) . (hasData name))
         result <- runQuery grzH query
         return $ queryResultToCount result
+        
+{-|
+  The 'getObjAggByObjCount' function takes a query definition and two types.
+  It retrieves a list of objects with an aggregated count associated with each.
+-}        
+getObjAggByObjCount :: (GrzObjClass o1, GrzObjClass o2) =>
+    GrzHandle                            -- ^ data handle
+    -> (GrzObj -> o1)                    -- ^ wrapper for type to be aggregated
+    -> (GrzObj -> o2)                    -- ^ wrapper for result type
+    -> (GrzQueryDef -> GrzQueryDef)      -- ^ query definition
+    -> IO [(o2, Int)]                    -- ^ (object, count) pair
+getObjAggByObjCount grzH w1 w2 queryDefs =
+    do
+        t2 <- maybeGetStringHandle grzH (objWrapperToString (w2 emptyObj))
+        case t2 of
+            Nothing -> return []
+            Just (_,i2) -> do
+                query <- grzCreateQuery grzH ((hasType w1) . queryDefs . (setQueryType (GrzQTAggByObjCount i2)))
+                result <- runQuery grzH query
+                return $ queryResultToAggByObjCount w2 result
+{-|
+  The 'getObjAggByObjSumCount' function takes a query definition, a metadata 
+  name and two types. It retrieves a list of objects with an aggregated sum 
+  (of the metadata value) and count associated with each.
+-}        
+getObjAggByObjSumCount :: (GrzObjClass o1, GrzObjClass o2) =>
+    GrzHandle                            -- ^ data handle
+    -> String                            -- ^ metadata name attached to values being aggregated
+    -> (GrzObj -> o1)                    -- ^ wrapper for type to be aggregated
+    -> (GrzObj -> o2)                    -- ^ wrapper for result type
+    -> (GrzQueryDef -> GrzQueryDef)      -- ^ query definition
+    -> IO [(o2, (Int,Int))]                    -- ^ (object, count) pair
+getObjAggByObjSumCount grzH name w1 w2 queryDefs =
+    do
+        t2 <- maybeGetStringHandle grzH (objWrapperToString (w2 emptyObj))
+        case t2 of
+            Nothing -> return []
+            Just (_,i2) -> do
+                mn <- maybeGetStringHandle grzH name
+                case mn of
+                    Nothing -> return []
+                    Just (_,n) -> do
+                        query <- grzCreateQuery grzH ((hasType w1) . queryDefs . (setQueryType (GrzQTAggByObjSumCount i2 n)))
+                        result <- runQuery grzH query
+                        return $ queryResultToAggByObjSumCount w2 result
         
 {-|
   The 'getObjAggSumCount' function takes a query definition and a metadata name.
@@ -602,4 +649,4 @@ getObjAggSumCount grzH queryDefs name =
 -- utilities
 
 trimWhiteSpace :: String -> String
-trimWhiteSpace = dropWhile isSpace . reverse . dropWhile isSpace . reverse          
+trimWhiteSpace = dropWhile isSpace . reverse . dropWhile isSpace . reverse        

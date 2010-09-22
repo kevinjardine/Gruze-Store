@@ -42,9 +42,8 @@ queryResultToSumCount ([[_,SqlNull]],_) = (0,0)
 queryResultToSumCount ([[SqlNull,_]],_) = (0,0)
 queryResultToSumCount ([[s,c]],_) = ((fromSql s)::Int,(fromSql c)::Int)
 queryResultToSumCount _ = (0,0)
-           
-queryRowToObj :: Map.Map Int GrzAtomBox -> [SqlValue] -> GrzObj
-queryRowToObj m [oid,ot,otc,otu,oo,oc,os,e] =
+
+populateObj m [oid,ot,otc,otu,oo,oc,os,e] =
     GrzObjFull {
         objID = guid,
         objType = (fromSql ot) :: String,
@@ -61,6 +60,48 @@ queryRowToObj m [oid,ot,otc,otu,oo,oc,os,e] =
     where 
         guid = (fromSql oid) :: Int
         enabled = if ((fromSql e) :: Int) == 1 then True else False
+           
+queryRowToObj :: Map.Map Int GrzAtomBox -> [SqlValue] -> GrzObj
+queryRowToObj m r = populateObj m r    
+
+queryResultToAggByObjCount :: GrzObjClass o =>
+     (GrzObj -> o)                                      -- ^ type wrapper
+    -> ([[SqlValue]],([(String,Int)],[[SqlValue]]))     -- ^ query result
+    -> [(o,Int)]                                        -- returns list of (obj, count) pairs
+queryResultToAggByObjCount w (r, (n,mr)) = map (queryRowToAggByObjCount w mq) r
+    where
+        mq =  metadataQueryToAtomBoxDict n mr
+        
+queryResultToAggByObjSumCount :: GrzObjClass o =>
+     (GrzObj -> o)                                      -- ^ type wrapper
+    -> ([[SqlValue]],([(String,Int)],[[SqlValue]]))     -- ^ query result
+    -> [(o,(Int,Int))]                                    -- returns list of (obj, count) pairs
+queryResultToAggByObjSumCount w (r, (n,mr)) = map (queryRowToAggByObjSumCount w mq) r
+    where
+        mq =  metadataQueryToAtomBoxDict n mr
+                        
+queryRowToAggByObjCount :: GrzObjClass o =>
+    (GrzObj -> o)               -- ^ type wrapper
+    -> Map.Map Int GrzAtomBox   -- ^ metadata 
+    -> [SqlValue]               -- row from database
+    -> (o,Int)                  -- resulting (obj,count) pair
+queryRowToAggByObjCount w m r =
+    (obj, count)
+    where 
+        count = (fromSql (r !! 8)) :: Int
+        obj = w $ populateObj m (take 8 r)
+
+queryRowToAggByObjSumCount :: GrzObjClass o =>
+    (GrzObj -> o)               -- ^ type wrapper
+    -> Map.Map Int GrzAtomBox   -- ^ metadata 
+    -> [SqlValue]               -- row from database
+    -> (o,(Int,Int))            -- resulting (obj,(sum,count)) pair
+queryRowToAggByObjSumCount w m r =
+    (obj, (qsum,count))
+    where 
+        count = (fromSql (r !! 8)) :: Int
+        qsum = (fromSql (r !! 9)) :: Int
+        obj = w $ populateObj m (take 8 r)
             
 -- TODO: get this to work with GROUPed results
 queryResultToObjs :: ([[SqlValue]],([(String,Int)],[[SqlValue]]))
@@ -123,7 +164,13 @@ grzGetQuery grzH ((m,n), q) =
         let prefix = prefix' 
                         ++ if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
                             then "" 
-                            else "SELECT " ++ agg ++ " AS guid, count(" ++ agg ++ ") FROM objects obj0 "
+                            else if isJust maybeAggByObjQueryNameID 
+                                    then
+                                        "SELECT " ++ agg ++ " AS guid, count(" ++ agg 
+                                            ++ ") AS grzCount, sum(ma.integerValue) AS grzSum FROM objects obj0 "
+                                    else
+                                        "SELECT " ++ agg ++ " AS guid, count(" ++ agg 
+                                            ++ ") AS grzCount FROM objects obj0 "
         let suffix = (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
                             then ""
                             else " GROUP BY " ++ agg ++ " ")
@@ -141,6 +188,7 @@ grzGetQuery grzH ((m,n), q) =
                     (((prefix
                     ++ " "
                     ++ (intercalate " " (reverse $ getQueryJoins q))
+                    ++ aggNameJoin
                     ++ (if (null whereBit) && (null frags)
                             then ""
                             else (" WHERE " 
@@ -148,6 +196,8 @@ grzGetQuery grzH ((m,n), q) =
                                 ++ (if (null frags) || (null whereBit) then "" else " AND ")
                                 ++ (intercalate " AND " frags))
                         )
+                    ++ aggTypeWhere
+                    ++ aggNameWhere
                     ++ " " 
                     ++ suffix), queryType), d),
                    (needs, (concatMap fst qv, concatMap snd qv)) )
@@ -155,14 +205,39 @@ grzGetQuery grzH ((m,n), q) =
         whereBit = getQueryWheres q
         needs = getQueryNeeds q
         queryType = getQueryType q
+        maybeAggByObjQueryTypeID = case queryType of
+                                GrzQTAggByObjCount i -> Just i
+                                GrzQTAggByObjSumCount i _ -> Just i
+                                otherwise -> Nothing
+        maybeAggByObjQueryNameID = case queryType of
+                                GrzQTAggByObjSumCount _ j -> Just j
+                                otherwise -> Nothing
         -- agg = getQueryAgg q
-        agg = "obj" ++ (show m) ++ ".guid"
+        -- need to add some sanity checking in here in case m is zero
+        agg = "obj" ++ (show $ if isJust maybeAggByObjQueryTypeID 
+                                then m-1 
+                                else m)
+                    ++ ".guid"
+        -- possibly add type and metadata constraints for the objects being aggregated
+        aggTypeWhere = case maybeAggByObjQueryTypeID of
+                        Just i -> " AND obj" ++ (show (m-1)) 
+                            ++ ".objectType = " ++ (show i)
+                        Nothing -> ""
+        aggNameJoin = case maybeAggByObjQueryNameID of 
+                        Just _ -> " INNER JOIN metadata ma ON (obj" 
+                            ++ (show m) ++ ".guid = ma.objectGuid) "
+                        Nothing -> ""
+        aggNameWhere = case maybeAggByObjQueryNameID of 
+                        Just j -> " AND ma.nameId = " ++ (show j) ++ " AND ma.metadataType = 0 " 
+                        Nothing -> ""
         sqlFn = case queryType of
                     GrzQTCount ->  "_query_count.sql"
                     GrzQTID ->  "_query_guid.sql"
                     GrzQTFull -> "_query_full.sql"
                     GrzQTAggCount -> "_query_agg_count.sql"
                     GrzQTAggSumCount -> "_query_agg_sumcount.sql"
+                    GrzQTAggByObjCount _ -> "_query_aggbyobj_count.sql"
+                    GrzQTAggByObjSumCount _ _ -> "_query_aggbyobj_sumcount.sql"
                    
 grzQueryWhereFragments :: GrzHandle 
     -> [GrzQueryDefItem] 

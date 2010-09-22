@@ -13,7 +13,8 @@ type GrzInt = Int
 
 type GrzQuery = (((String,GrzQueryType),[(String,Int)]), ([String],GrzQueryValues))
 
-data GrzQueryType = GrzQTFull | GrzQTCount | GrzQTID | GrzQTAggCount | GrzQTAggSumCount
+data GrzQueryType = GrzQTFull | GrzQTCount | GrzQTID | GrzQTAggCount 
+    | GrzQTAggSumCount | GrzQTAggByObjCount Int | GrzQTAggByObjSumCount Int Int
     deriving (Show, Eq)
 
 type GrzQueryDef = ((Int,Int), [GrzQueryDefItem])
