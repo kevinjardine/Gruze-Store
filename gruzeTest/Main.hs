@@ -1,11 +1,14 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE TemplateHaskell #-} 
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ExtendedDefaultRules #-}
 
 import Data.Store.Gruze
 import Data.Store.Gruze.Templates
 
 import qualified Data.ByteString as BS
+
+default (Int)
 
 -- define some type safe wrappers
 
@@ -192,18 +195,32 @@ main = do
     janeComment <- commentOnBlogPost grzH post jane teacherRole
         "John, thanks for checking Gruze out!"
         
-    -- Get the container of the container of Jane's Comment,
-    -- which should be a Blog.
+    -- Get the container of the container of Jane's Comment, which should be 
+    -- a Blog.
+    
     -- This shows how to do queries with one of the special relationships.
-    -- Notice that the withObj invocation occurs first (bottom) because it refers
-    -- to the comment and the withData invocation occurs last (top) because
-    -- it refers to the Blog
+    -- Notice that the withObj invocation occurs first (bottom) because it
+    -- refers to the comment and the withData invocation occurs last (top)
+    -- because it refers to the Blog
     putStrLn "\nContainer of the container of Jane's comment:" 
     let ccqd = (withData ["title"])
                 . (hasRel "+hasContainer") 
                 . (hasRel "+hasContainer") 
                 . (withObj janeComment)
     rc <- getObjs grzH Blog ccqd 0 0
+    mapM (putStrLn . ppObjFull) rc
+    
+    -- Another query example, this time getting all the high ratings (>= 4) 
+    -- for John's BlogPost.
+    -- Notice the reverse "-hasContainer" relationship, which gets all the
+    -- objects within a container.
+    
+    putStrLn "\nAll high ratings of John's blog post:" 
+    let ccqd = (withData ["value"])
+                . (hasOp "value" ">=" 4 )
+                . (hasRel "-hasContainer") 
+                . (withObj post)
+    rc <- getObjs grzH Rating ccqd 0 0
     mapM (putStrLn . ppObjFull) rc
         
     -- generate a report on the blog post response
