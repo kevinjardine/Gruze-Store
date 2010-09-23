@@ -100,10 +100,10 @@ queryRowToAggByObjSumCount w m r =
     (obj, (qsum,count))
     where 
         count = (fromSql (r !! 8)) :: Int
-        qsum = (fromSql (r !! 9)) :: Int
+        qs = r !! 9 
+        qsum = if qs == SqlNull then 0 else ((fromSql qs) :: Int)
         obj = w $ populateObj m (take 8 r)
             
--- TODO: get this to work with GROUPed results
 queryResultToObjs :: ([[SqlValue]],([(String,Int)],[[SqlValue]]))
     -> [GrzObj]
 queryResultToObjs (r, (n,mr)) = map (queryRowToObj mq) r
@@ -117,19 +117,24 @@ needToString _ = []
 getQueryNeeds :: [GrzQueryDefItem] -> [String]
 getQueryNeeds q = concatMap needToString q
 
-joinToString :: GrzQueryDefItem -> [String]
-joinToString (GrzQDJoin x) = [x]
-joinToString _ = []
+joinToString :: Int -> Maybe Int -> GrzQueryDefItem -> [String]
+joinToString m (Just _) (GrzQDJoin n x) = if (m-1) == n then ["LEFT JOIN " ++ x] else ["INNER JOIN " ++ x]
+joinToString m Nothing (GrzQDJoin n x) = ["INNER JOIN " ++ x]
+joinToString _ _ _ = []
 
-getQueryJoins :: [GrzQueryDefItem] -> [String]
-getQueryJoins q = concatMap joinToString q
+getQueryJoins :: [GrzQueryDefItem] -> Int -> Maybe Int -> [String]
+getQueryJoins q m maybeAggByObjQueryTypeID = concatMap (joinToString m maybeAggByObjQueryTypeID) q
 
-whereToString :: GrzQueryDefItem -> [String]
-whereToString (GrzQDWhere s) = [s]
-whereToString _ = []
+whereToString :: Int -> Maybe Int -> GrzQueryDefItem -> [String]
+whereToString m (Just _) (GrzQDWhere n s) = 
+    if (m - 1) == n
+        then [" ((obj" ++ (show n) ++ ".guid IS NULL) OR (" ++ s ++ ")) "]
+        else [s]
+whereToString m Nothing (GrzQDWhere n s) = [s]
+whereToString _ _ _ = []
 
-getQueryWheres :: [GrzQueryDefItem] -> [String]
-getQueryWheres q = concatMap whereToString q
+getQueryWheres :: [GrzQueryDefItem] -> Int -> Maybe Int -> [String]
+getQueryWheres q m maybeAggByObjQueryTypeID = concatMap (whereToString m maybeAggByObjQueryTypeID) q
 
 getQueryType :: [GrzQueryDefItem] -> GrzQueryType
 getQueryType q = case concatMap isQueryType q of
@@ -153,9 +158,16 @@ isQueryAgg _ = []
 grzCreateQuery :: GrzHandle -> (GrzQueryDef -> GrzQueryDef) -> IO (Maybe GrzQuery)
 grzCreateQuery grzH q = grzGetQuery grzH (q ((0,0), []))
 
--- derives the query string, looking up any string handles in the database
--- if any string handle lookups fail, this function returns Nothing
--- otherwise it returns the list of need names and the actual query string
+-- Derives the query string, looking up any string handles in the database.
+
+-- If any string handle lookups fail, this function returns Nothing;
+-- otherwise it returns the list of need names and the actual query string.
+
+-- Much of the complexity of this function comes from dealing with aggregation,
+-- which in some cases requires LEFT JOINS and special null value handling
+-- as the objects being aggregated do not necessarily exist (and
+-- so should return a count and sum of zero)
+
 grzGetQuery :: GrzHandle -> GrzQueryDef -> IO (Maybe GrzQuery)
 grzGetQuery grzH ((m,n), q) =
     do     
@@ -166,8 +178,8 @@ grzGetQuery grzH ((m,n), q) =
                             then "" 
                             else if isJust maybeAggByObjQueryNameID 
                                     then
-                                        "SELECT " ++ agg ++ " AS guid, count(" ++ agg 
-                                            ++ ") AS grzCount, sum(ma.integerValue) AS grzSum FROM objects obj0 "
+                                        "SELECT " ++ agg ++ " AS guid, count(ma.id) AS grzCount, "
+                                            ++ "sum(ma.integerValue) AS grzSum FROM objects obj0 "
                                     else
                                         "SELECT " ++ agg ++ " AS guid, count(" ++ agg 
                                             ++ ") AS grzCount FROM objects obj0 "
@@ -175,7 +187,7 @@ grzGetQuery grzH ((m,n), q) =
                             then ""
                             else " GROUP BY " ++ agg ++ " ")
                         ++ suffix'
-        maybeFrags <- grzQueryWhereFragments grzH q
+        maybeFrags <- grzQueryWhereFragments grzH q m maybeAggByObjQueryTypeID
         if isNothing maybeFrags
             then
                 return Nothing
@@ -187,7 +199,7 @@ grzGetQuery grzH ((m,n), q) =
                 return $ Just (
                     (((prefix
                     ++ " "
-                    ++ (intercalate " " (reverse $ getQueryJoins q))
+                    ++ (intercalate " " (reverse $ getQueryJoins q m maybeAggByObjQueryTypeID))
                     ++ aggNameJoin
                     ++ (if (null whereBit) && (null frags)
                             then ""
@@ -202,7 +214,7 @@ grzGetQuery grzH ((m,n), q) =
                     ++ suffix), queryType), d),
                    (needs, (concatMap fst qv, concatMap snd qv)) )
     where
-        whereBit = getQueryWheres q
+        whereBit = getQueryWheres q m maybeAggByObjQueryTypeID
         needs = getQueryNeeds q
         queryType = getQueryType q
         maybeAggByObjQueryTypeID = case queryType of
@@ -212,8 +224,7 @@ grzGetQuery grzH ((m,n), q) =
         maybeAggByObjQueryNameID = case queryType of
                                 GrzQTAggByObjSumCount _ j -> Just j
                                 otherwise -> Nothing
-        -- agg = getQueryAgg q
-        -- need to add some sanity checking in here in case m is zero
+        -- need to add some sanity checking in here in case m is zero?
         agg = "obj" ++ (show $ if isJust maybeAggByObjQueryTypeID 
                                 then m-1 
                                 else m)
@@ -224,11 +235,12 @@ grzGetQuery grzH ((m,n), q) =
                             ++ ".objectType = " ++ (show i)
                         Nothing -> ""
         aggNameJoin = case maybeAggByObjQueryNameID of 
-                        Just _ -> " INNER JOIN metadata ma ON (obj" 
+                        Just _ -> " LEFT JOIN metadata ma ON (obj" 
                             ++ (show m) ++ ".guid = ma.objectGuid) "
                         Nothing -> ""
         aggNameWhere = case maybeAggByObjQueryNameID of 
-                        Just j -> " AND ma.nameId = " ++ (show j) ++ " AND ma.metadataType = 0 " 
+                        Just j -> " AND ((ma.nameId IS NULL) OR (ma.nameId = " ++ (show j) 
+                            ++ " AND ma.metadataType = 0)) " 
                         Nothing -> ""
         sqlFn = case queryType of
                     GrzQTCount ->  "_query_count.sql"
@@ -240,10 +252,12 @@ grzGetQuery grzH ((m,n), q) =
                     GrzQTAggByObjSumCount _ _ -> "_query_aggbyobj_sumcount.sql"
                    
 grzQueryWhereFragments :: GrzHandle 
-    -> [GrzQueryDefItem] 
+    -> [GrzQueryDefItem]
+    -> Int
+    -> Maybe Int
     -> IO (Maybe [((String,[(String,Int)]), GrzQueryValues)])
-grzQueryWhereFragments grzH q = do
-    r <- mapM (grzHandleWhereQueryFragment grzH) frags
+grzQueryWhereFragments grzH q m maybeAggByObjQueryTypeID = do
+    r <- mapM (grzHandleWhereQueryFragment grzH m maybeAggByObjQueryTypeID) frags
     if and $ map isJust r
         then
             return $ Just (map fromJust r)
@@ -251,26 +265,35 @@ grzQueryWhereFragments grzH q = do
             return Nothing
     where
         frags = filter (\x -> case x of
-                                GrzQDWhereFrags _ -> True
+                                GrzQDWhereFrags _ _ -> True
                                 otherwise -> False
                        ) q
 
-grzHandleWhereQueryFragment :: GrzHandle 
+grzHandleWhereQueryFragment :: GrzHandle
+    -> Int
+    -> Maybe Int
     -> GrzQueryDefItem 
     -> IO (Maybe ((String,[(String,Int)]), GrzQueryValues))
-grzHandleWhereQueryFragment grzH (GrzQDWhereFrags items) = do
+grzHandleWhereQueryFragment grzH m maybeAggByObjQueryTypeID (GrzQDWhereFrags n items) = do
     r <- mapM (qwfItemToMaybeString grzH) items
     if and $ map isJust r
         then do
             let j = map fromJust r
             let s = concatMap (fst . fst) j
+            let s' = case maybeAggByObjQueryTypeID of
+                        (Just _) -> if m == n
+                                        then
+                                            " ((obj" ++ (show n) ++ ".guid IS NULL) OR (" ++ s ++ ")) "
+                                        else
+                                            s
+                        Nothing -> s 
             let d = concatMap (snd . fst) j
             let v = map snd j            
-            return $ Just ((s,d), (concatMap fst v, concatMap snd v))
+            return $ Just ((s',d), (concatMap fst v, concatMap snd v))
         else
             return Nothing
 
-qwfItemToMaybeString :: GrzHandle 
+qwfItemToMaybeString :: GrzHandle
     -> GrzQDWFItem 
     -> IO (Maybe ((String,[(String,Int)]), GrzQueryValues))  
 qwfItemToMaybeString grzH item =

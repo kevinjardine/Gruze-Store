@@ -585,7 +585,10 @@ getObjAggCount grzH queryDefs name =
         query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggCount) . (hasData name))
         result <- runQuery grzH query
         return $ queryResultToCount result
-        
+
+-- TODO: the AggByObj functions do not work properly if the count is zero
+-- need to do some changes with left joins and some null handling
+                
 {-|
   The 'getObjAggByObjCount' function takes a query definition and two types.
   It retrieves a list of objects with an aggregated count associated with each.

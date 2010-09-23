@@ -116,9 +116,9 @@ main = do
         "teacher"
         "All teachers should be given this role."
         
-    studentRole <- createRole grzH
-        "student"
-        "All students should be given this role."
+    loggedInUserRole <- createRole grzH
+        "loggedInUser"
+        "All registered users should be given this role."
     
     -- create a collection for teacher content    
     teacherCollection <- createCollection grzH
@@ -127,28 +127,36 @@ main = do
     -- create a communal teacher's blog within the teacher collection 
     teacherBlog <- createBlog grzH teacherCollection
         "A collective blog used by all teachers."
+        
+    -- create a collection for student content    
+    studentCollection <- createCollection grzH
+        "Collection of content for students."
+    
+    -- create a communal student's blog within the student collection 
+    studentBlog <- createBlog grzH studentCollection
+        "A collective blog used by all students."
     
     -- create some teachers    
     john <- createUser grzH
         "John Smith"
         "john@example.com"
-        (Just teacherRole)
+        [loggedInUserRole, teacherRole]
           
     jane <- createUser grzH
         "Jane Doe"
         "jane@example.com"
-        (Just teacherRole)
+        [loggedInUserRole, teacherRole]
         
     wendy <- createUser grzH
         "Wendy Inkster"
         "wendy@example.com"
-        (Just teacherRole)
+        [loggedInUserRole, teacherRole]
         
-    -- create a student
+    -- create a student (does not have the teacherRole)
     tom <- createUser grzH
         "Tom Chang"
         "tom@example.com"
-        (Just studentRole)
+        [loggedInUserRole]
     
     -- John posts to the teacher blog and sets view access to the teacherRole
     post <- postBlog grzH teacherBlog john teacherRole
@@ -176,14 +184,14 @@ main = do
             . (setAtom "image" fa)
     
     -- Apply edits to original post and save. 
-    revisedPost <- saveObj grzH (edits post)
+    johnPost <- saveObj grzH (edits post)
         
     putStrLn "\nNew blog post created, full output:"           
-    putStrLn $ ppObjFull revisedPost
+    putStrLn $ ppObjFull johnPost
     
     -- Load and display the owner object including the name field.
     -- Not all objects have owners so this is a maybe.
-    postOwner <- maybeLoadOwner grzH User revisedPost ["name"]
+    postOwner <- maybeLoadOwner grzH User johnPost ["name"]
     
     putStrLn $ "Blog post owner: " ++ (fromMaybe "" $ fmap ppObjFull postOwner)              
     
@@ -209,6 +217,14 @@ main = do
     rc <- getObjs grzH Blog ccqd 0 0
     mapM (putStrLn . ppObjFull) rc
     
+    -- Tom the student posts in the student blog
+    -- setting the access to all logged-in users 
+    tomPost <- postBlog grzH studentBlog tom loggedInUserRole
+        "Hello world!" 
+        "Blogging from a student perspective." 
+        ["experimenting","cool stuff","gruze"]
+        Nothing    
+    
     -- Another query example, this time getting all the high Ratings (>= 4) 
     -- for John's BlogPost.
     
@@ -219,7 +235,7 @@ main = do
     let ccqd = (withData ["value"])
                 . (hasOp "value" ">=" 4)
                 . (hasRel "-hasContainer") 
-                . (withObj post)
+                . (withObj johnPost)
     rc <- getObjs grzH Rating ccqd 0 0
     mapM (putStrLn . ppObjFull) rc
         
@@ -256,7 +272,7 @@ main = do
     putStrLn $ "\nPer object aggregation example (sum and count of ratings per blog post): "
     
     raboc <- getObjAggByObjSumCount grzH "value" Rating BlogPost
-                ((hasRel "-hasContainer"))
+                ((hasType Rating) . (hasRel "-hasContainer"))
             
     putStrLn $ concatMap (\(o,(s,c)) -> 
                 ("(" ++ (ppObj o) ++ "," ++ (show s) ++ "," ++ (show c) ++ ")\n")
@@ -291,16 +307,12 @@ createSite grzH subType title description =
             . (setString "title" title)
             . (setString "description" title)
 
--- create a user and optionally add the user to a role    
-createUser :: GrzHandle -> String -> String -> Maybe Role -> IO User
-createUser grzH name email maybeRole = do
+-- create a user and optionally add the user to roles    
+createUser :: GrzHandle -> String -> String -> [Role] -> IO User
+createUser grzH name email roles = do
     user <- createObj grzH User od
-    case maybeRole of
-        Just role -> do
-            addUserToRole grzH user role
-            return user
-        Nothing ->
-            return user
+    mapM_ (addUserToRole grzH user) roles
+    return user
     where
         od =
             (setSite (grzDefaultSite grzH))

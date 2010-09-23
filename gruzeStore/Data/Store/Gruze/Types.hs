@@ -21,9 +21,9 @@ type GrzQueryDef = ((Int,Int), [GrzQueryDefItem])
 
 data GrzQueryDefItem = 
         GrzQDIsCount Bool 
-        | GrzQDWhere String 
-        | GrzQDJoin String 
-        | GrzQDWhereFrags [GrzQDWFItem]
+        | GrzQDWhere Int String 
+        | GrzQDJoin Int String 
+        | GrzQDWhereFrags Int [GrzQDWFItem]
         | GrzQDNeeds String Int
         | GrzQDSelect String
         | GrzQDGroup String
