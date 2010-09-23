@@ -217,6 +217,14 @@ main = do
     rc <- getObjs grzH Blog ccqd 0 0
     mapM (putStrLn . ppObjFull) rc
     
+    -- Wendy the teacher posts in the teacher blog
+    -- setting the access to teachers only 
+    wendyPost <- postBlog grzH teacherBlog wendy teacherRole
+        "Wendy's first post" 
+        "Looking forward to learning about the Gruze API." 
+        ["experimenting","coding","new stuff"]
+        Nothing  
+    
     -- Tom the student posts in the student blog
     -- setting the access to all logged-in users 
     tomPost <- postBlog grzH studentBlog tom loggedInUserRole
@@ -238,7 +246,10 @@ main = do
                 . (withObj johnPost)
     rc <- getObjs grzH Rating ccqd 0 0
     mapM (putStrLn . ppObjFull) rc
-        
+   
+    -- examples of overall aggregation (which returns a count or a (sum,count)
+    -- pair rather than an object list)
+         
     -- generate a report on the blog post response
     
     -- get the number of Comments
@@ -265,18 +276,58 @@ main = do
         ++ "\nAverage rating: "
         ++ avgRating
         
-    -- an example of per object aggregation
-    -- In this case, we are listing all blog posts and
-    -- a sum and count of the ratings each has
+    -- Examples of per object aggregation
     
-    putStrLn $ "\nPer object aggregation example (sum and count of ratings per blog post): "
+    -- This returns either a (object, count) pair using getObjAggByObjCount
+    -- or a (object,(sum,count)) pair using getObjAggByObjSumCount.
     
-    raboc <- getObjAggByObjSumCount grzH "value" Rating BlogPost
-                ((hasType Rating) . (hasRel "-hasContainer"))
+    -- In this example, we are listing all blog posts with a count of the 
+    -- comments and then queries with a sum and count of the all ratings
+    -- for each post, and then just the high ratings (value >= 4) for
+    -- all blog posts inside blogs inside the teacher collection.
+    
+    -- The Gruze query system takes special care to deal with the case where
+    -- the object being aggregated (in this case a comment or rating) does not
+    -- exist. Notice in this example that the blog post is still returned but 
+    -- with a sum and/or count of zero. Achieving this in SQL requires 
+    -- LEFT JOINs and special NULL handling - details that are hidden by the 
+    -- higher level Gruze query system.
+    
+    putStrLn $ "\nPer object aggregation example \n(count of comments per blog post): "
+    
+    raboc <- getObjAggByObjCount grzH Comment BlogPost
+                ((hasRel "-hasContainer"))
+            
+    putStrLn $ concatMap (\(o,c) -> 
+                ("(" ++ (ppObj o) ++ "," ++ (show c) ++ ")\n")
+            ) raboc
+            
+    putStrLn $ "\nPer object aggregation example \n(sum and count of all ratings per blog post): "
+    
+    rabosc <- getObjAggByObjSumCount grzH "value" Rating BlogPost
+                ((hasRel "-hasContainer"))
             
     putStrLn $ concatMap (\(o,(s,c)) -> 
                 ("(" ++ (ppObj o) ++ "," ++ (show s) ++ "," ++ (show c) ++ ")\n")
-            ) raboc
+            ) rabosc
+            
+    -- a more complex example aggregating high value ratings for blog posts
+    -- that are contained in blogs inside the teacher collection
+    
+    putStrLn $ "\nPer object aggregation example \n(sum and count of high ratings per teacher blog post): "
+    
+    rabosc2 <- getObjAggByObjSumCount grzH "value" Rating BlogPost
+                (   (hasOp "value" ">=" 4)
+                    . (hasRel "-hasContainer") 
+                    . (hasRel "-hasContainer")
+                    . (hasType Blog)
+                    . (hasRel "-hasContainer")
+                    . (withObj teacherCollection)
+                )
+            
+    putStrLn $ concatMap (\(o,(s,c)) -> 
+                ("(" ++ (ppObj o) ++ "," ++ (show s) ++ "," ++ (show c) ++ ")\n")
+            ) rabosc2
     
     -- When searching, Tom cannot find the same content as John
     -- because students and teachers have different roles.

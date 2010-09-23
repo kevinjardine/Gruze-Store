@@ -118,7 +118,7 @@ getQueryNeeds :: [GrzQueryDefItem] -> [String]
 getQueryNeeds q = concatMap needToString q
 
 joinToString :: Int -> Maybe Int -> GrzQueryDefItem -> [String]
-joinToString m (Just _) (GrzQDJoin n x) = if (m-1) == n then ["LEFT JOIN " ++ x] else ["INNER JOIN " ++ x]
+joinToString m (Just _) (GrzQDJoin n x) = if n >= m-1 then ["LEFT JOIN " ++ x] else ["INNER JOIN " ++ x]
 joinToString m Nothing (GrzQDJoin n x) = ["INNER JOIN " ++ x]
 joinToString _ _ _ = []
 
@@ -127,7 +127,7 @@ getQueryJoins q m maybeAggByObjQueryTypeID = concatMap (joinToString m maybeAggB
 
 whereToString :: Int -> Maybe Int -> GrzQueryDefItem -> [String]
 whereToString m (Just _) (GrzQDWhere n s) = 
-    if (m - 1) == n
+    if n >= m-1
         then [" ((obj" ++ (show n) ++ ".guid IS NULL) OR (" ++ s ++ ")) "]
         else [s]
 whereToString m Nothing (GrzQDWhere n s) = [s]
@@ -166,11 +166,12 @@ grzCreateQuery grzH q = grzGetQuery grzH (q ((0,0), []))
 -- Much of the complexity of this function comes from dealing with aggregation,
 -- which in some cases requires LEFT JOINS and special null value handling
 -- as the objects being aggregated do not necessarily exist (and
--- so should return a count and sum of zero)
+-- so in that case should return a count and sum of zero).
 
 grzGetQuery :: GrzHandle -> GrzQueryDef -> IO (Maybe GrzQuery)
 grzGetQuery grzH ((m,n), q) =
-    do     
+    do
+        -- TODO: store these strings in a dictionary rather than reading them in     
         prefix' <- readFile $ (grzDataDirectory grzH) ++ "/config/mysql/" ++ "prefix" ++ sqlFn
         suffix' <- readFile $ (grzDataDirectory grzH) ++ "/config/mysql/" ++ "suffix" ++ sqlFn
         let prefix = prefix' 
@@ -181,8 +182,8 @@ grzGetQuery grzH ((m,n), q) =
                                         "SELECT " ++ agg ++ " AS guid, count(ma.id) AS grzCount, "
                                             ++ "sum(ma.integerValue) AS grzSum FROM objects obj0 "
                                     else
-                                        "SELECT " ++ agg ++ " AS guid, count(" ++ agg 
-                                            ++ ") AS grzCount FROM objects obj0 "
+                                        "SELECT " ++ agg ++ " AS guid, count(obj" ++ (show m) 
+                                            ++ ".guid) AS grzCount FROM objects obj0 "
         let suffix = (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
                             then ""
                             else " GROUP BY " ++ agg ++ " ")
