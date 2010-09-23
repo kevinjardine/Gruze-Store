@@ -1,0 +1,65 @@
+<project version="Crimson Editor 3.60">
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Box.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\DBTypes.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\GruzeStore.cabal" />
+	<localfile path="D:\projects\haskell\gruzeTest\gruzeTest.cabal" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Handles.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\IO.hs" />
+	<localfile path="D:\projects\haskell\gruzeTest\Main.hs" />
+	<localfile path="D:\projects\haskell\newlog.txt" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_agg_count.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_agg_sumcount.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_aggbyobj_count.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_count.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_full.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_guid.sql" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Query.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\QueryDef.hs" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_agg_count.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_agg_sumcount.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_count.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_full.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_guid.sql" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Templates.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Types.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Utility.hs" />
+</project>
+
+<workspace version="Crimson Editor 3.60">
+	<localfile path="D:\projects\haskell\gruze\Web\Gruze\Plugins\View\ViewStart.hs" linenum="42" placement="0:1:-1:-1:-4:-30:44:58:885:419" />
+	<localfile path="D:\projects\haskell\gruze\Web\Gruze\Plugins.hs" linenum="203" placement="0:1:-1:-1:-4:-30:66:87:911:452" />
+	<localfile path="D:\projects\haskell\gruze\Web\Gruze\Core\Types.hs" linenum="611" placement="0:1:-1:-1:-4:-30:88:116:933:481" />
+	<localfile path="D:\projects\haskell\gruze\Web\Gruze\Core\Route.hs" linenum="206" placement="0:1:-1:-1:-4:-30:110:145:955:510" />
+	<localfile path="D:\projects\haskell\gruze\Web\Gruze\Core\Utility.hs" linenum="8" placement="0:1:-1:-1:-4:-30:132:174:977:539" />
+	<localfile path="D:\projects\haskell\log.txt" linenum="1" placement="0:1:-1:-1:-4:-30:0:0:845:365" />
+	<localfile path="D:\projects\haskell\gruzeStore\GruzeStore.cabal" linenum="18" placement="0:1:-1:-1:-4:-30:44:58:889:423" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Box.hs" linenum="416" placement="0:1:-1:-1:-4:-30:88:116:933:481" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\IO.hs" linenum="620" placement="0:1:-1:-1:-4:-30:132:174:977:539" />
+	<localfile path="D:\projects\haskell\gruzeTest\gruzeTest.cabal" linenum="61" placement="0:1:-1:-1:-4:-30:0:0:845:365" />
+	<localfile path="D:\projects\haskell\gruzeTest\Main.hs" linenum="259" placement="0:1:-1:-1:-4:-30:22:29:867:394" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Types.hs" linenum="17" placement="0:1:-1:-1:-4:-30:132:174:977:539" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\QueryDef.hs" linenum="318" placement="0:1:-1:-1:-4:-30:22:29:867:394" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Query.hs" linenum="207" placement="0:1:-1:-1:-4:-30:66:87:911:452" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Handles.hs" linenum="52" placement="0:1:-1:-1:-4:-30:88:116:933:481" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Utility.hs" linenum="58" placement="0:1:-1:-1:-4:-30:110:145:955:510" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\DBTypes.hs" linenum="13" placement="0:1:-1:-1:-4:-30:132:174:977:539" />
+	<localfile path="D:\projects\haskell\newlog2.txt" linenum="1" placement="0:1:-1:-1:-4:-30:44:58:889:423" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze.hs" linenum="113" placement="0:1:-1:-1:-4:-30:22:29:867:394" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Templates.hs" linenum="25" placement="0:1:-1:-1:-4:-30:132:174:977:539" />
+	<localfile path="D:\projects\haskell\gruzeStore\schema\schema.sql" linenum="10" placement="0:1:-1:-1:-4:-30:0:0:845:365" />
+	<localfile path="D:\xampp\htdocs\wsis\mod\incoming_mail_handler\start.php" linenum="1" placement="0:1:-1:-1:-4:-30:110:145:955:510" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_aggbyobj_count.sql" linenum="3" placement="0:1:-1:-1:-4:-30:66:87:911:452" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_guid.sql" linenum="1" placement="0:1:-1:-1:-4:-30:110:145:955:510" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_agg_count.sql" linenum="1" placement="0:1:-1:-1:-4:-30:132:174:977:539" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_full.sql" linenum="1" placement="0:1:-1:-1:-4:-30:0:0:845:365" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_count.sql" linenum="1" placement="0:1:-1:-1:-4:-30:22:29:867:394" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_agg_count.sql" linenum="1" placement="0:1:-1:-1:-4:-30:44:58:889:423" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_agg_sumcount.sql" linenum="1" placement="0:1:-1:-1:-4:-30:66:87:911:452" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_agg_sumcount.sql" linenum="1" placement="0:1:-1:-1:-4:-30:88:116:933:481" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_count.sql" linenum="3" placement="0:1:-1:-1:-4:-30:110:145:955:510" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_guid.sql" linenum="1" placement="0:1:-1:-1:-4:-30:132:174:977:539" />
+	<localfile path="D:\projects\haskell\newquery.txt" linenum="29" placement="0:1:-1:-1:-4:-30:66:87:911:452" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_aggbyobj_count.sql" linenum="1" placement="2:3:-1:-1:-4:-30:132:174:977:539" />
+</workspace>
+

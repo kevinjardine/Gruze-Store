@@ -88,7 +88,7 @@ main = do
        
     -- delete any previous test site (and all its content)
     let testSitesQd = hasIn "subtype" ["grzTest"]
-    testSites <- getBareObjs grzH' Site testSitesQd 0 0
+    testSites <- getBareObjs grzH' Site testSitesQd [] 0 0
     mapM_ (delObj grzH') testSites
     
     -- create a site to hold all the test content    
@@ -214,7 +214,7 @@ main = do
                 . (hasRel "+hasContainer") 
                 . (hasRel "+hasContainer") 
                 . (withObj janeComment)
-    rc <- getObjs grzH Blog ccqd 0 0
+    rc <- getObjs grzH Blog ccqd [] 0 0
     mapM (putStrLn . ppObjFull) rc
     
     -- Wendy the teacher posts in the teacher blog
@@ -244,7 +244,7 @@ main = do
                 . (hasOp "value" ">=" 4)
                 . (hasRel "-hasContainer") 
                 . (withObj johnPost)
-    rc <- getObjs grzH Rating ccqd 0 0
+    rc <- getObjs grzH Rating ccqd [] 0 0
     mapM (putStrLn . ppObjFull) rc
    
     -- examples of overall aggregation (which returns a count or a (sum,count)
@@ -297,6 +297,7 @@ main = do
     
     raboc <- getObjAggByObjCount grzH Comment BlogPost
                 ((hasRel "-hasContainer"))
+                [] 0 0
             
     putStrLn $ concatMap (\(o,c) -> 
                 ("(" ++ (ppObj o) ++ "," ++ (show c) ++ ")\n")
@@ -306,6 +307,7 @@ main = do
     
     rabosc <- getObjAggByObjSumCount grzH "value" Rating BlogPost
                 ((hasRel "-hasContainer"))
+                [SumAsc,GuidDesc] 0 0
             
     putStrLn $ concatMap (\(o,(s,c)) -> 
                 ("(" ++ (ppObj o) ++ "," ++ (show s) ++ "," ++ (show c) ++ ")\n")
@@ -324,6 +326,7 @@ main = do
                     . (hasRel "-hasContainer")
                     . (withObj teacherCollection)
                 )
+                [SumDesc] 0 0
             
     putStrLn $ concatMap (\(o,(s,c)) -> 
                 ("(" ++ (ppObj o) ++ "," ++ (show s) ++ "," ++ (show c) ++ ")\n")
@@ -435,7 +438,7 @@ rateBlogPost grzH post rater rating = do
 -- as the types are unclear, returns unwrapped objects                    
 searchForContent :: GrzHandle -> User -> String -> IO [GrzObj]
 searchForContent grzH user s = do
-    getUnwrappedObjs grzH qd 0 0
+    getUnwrappedObjs grzH qd [] 0 0
     where
         qd = hasPermission user "View" ((hasSearchable s) . (hasEnabled))
 

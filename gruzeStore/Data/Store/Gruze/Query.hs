@@ -22,10 +22,10 @@ valuesToSql :: GrzQueryValues -> [SqlValue]
 valuesToSql values = ((map toSql (fst values)) ++ (map toSql (snd values)))
 
 -- adds an extra bit to the query string
-addToQuery :: Maybe GrzQuery 
-    -> String 
+addToQuery :: String 
+    -> Maybe GrzQuery    
     -> Maybe GrzQuery
-addToQuery q extra = 
+addToQuery extra q = 
     case q of
         Just (((qs,qt),hd),v) -> Just (((qs++extra,qt),hd),v) 
         Nothing -> Nothing
@@ -171,23 +171,6 @@ grzCreateQuery grzH q = grzGetQuery grzH (q ((0,0), []))
 grzGetQuery :: GrzHandle -> GrzQueryDef -> IO (Maybe GrzQuery)
 grzGetQuery grzH ((m,n), q) =
     do
-        -- TODO: store these strings in a dictionary rather than reading them in     
-        prefix' <- readFile $ (grzDataDirectory grzH) ++ "/config/mysql/" ++ "prefix" ++ sqlFn
-        suffix' <- readFile $ (grzDataDirectory grzH) ++ "/config/mysql/" ++ "suffix" ++ sqlFn
-        let prefix = prefix' 
-                        ++ if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
-                            then "" 
-                            else if isJust maybeAggByObjQueryNameID 
-                                    then
-                                        "SELECT " ++ agg ++ " AS guid, count(ma.id) AS grzCount, "
-                                            ++ "sum(ma.integerValue) AS grzSum FROM objects obj0 "
-                                    else
-                                        "SELECT " ++ agg ++ " AS guid, count(obj" ++ (show m) 
-                                            ++ ".guid) AS grzCount FROM objects obj0 "
-        let suffix = (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
-                            then ""
-                            else " GROUP BY " ++ agg ++ " ")
-                        ++ suffix'
         maybeFrags <- grzQueryWhereFragments grzH q m maybeAggByObjQueryTypeID
         if isNothing maybeFrags
             then
@@ -243,14 +226,67 @@ grzGetQuery grzH ((m,n), q) =
                         Just j -> " AND ((ma.nameId IS NULL) OR (ma.nameId = " ++ (show j) 
                             ++ " AND ma.metadataType = 0)) " 
                         Nothing -> ""
-        sqlFn = case queryType of
-                    GrzQTCount ->  "_query_count.sql"
-                    GrzQTID ->  "_query_guid.sql"
-                    GrzQTFull -> "_query_full.sql"
-                    GrzQTAggCount -> "_query_agg_count.sql"
-                    GrzQTAggSumCount -> "_query_agg_sumcount.sql"
-                    GrzQTAggByObjCount _ -> "_query_aggbyobj_count.sql"
-                    GrzQTAggByObjSumCount _ _ -> "_query_aggbyobj_sumcount.sql"
+        sqlIndex = case queryType of
+                    GrzQTCount                  -> "count"
+                    GrzQTID                     -> "guid"
+                    GrzQTFull                   -> "full"
+                    GrzQTAggCount               -> "agg_count"
+                    GrzQTAggSumCount            -> "agg_sumcount"
+                    GrzQTAggByObjCount _        -> "aggbyobj_count"
+                    GrzQTAggByObjSumCount _ _   -> "aggbyobj_sumcount"
+        sqlFrags = fromJust $ lookup sqlIndex sqlDict    
+        prefix = (fst sqlFrags) 
+                    ++ if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
+                        then "" 
+                        else if isJust maybeAggByObjQueryNameID 
+                                then
+                                    "SELECT " ++ agg ++ " AS objGuid, count(ma.id) AS grzCount, "
+                                        ++ "sum(ma.integerValue) AS grzSum FROM objects obj0 "
+                                else
+                                    "SELECT " ++ agg ++ " AS objGuid, count(obj" ++ (show m) 
+                                        ++ ".guid) AS grzCount FROM objects obj0 "
+        suffix = (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
+                        then ""
+                        else " GROUP BY " ++ agg ++ " ")
+                    ++ (snd sqlFrags)
+                    
+sqlDict = [
+    ("full",(
+        "SELECT q1.objGuid, n.string, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled FROM (",
+        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid) INNER JOIN names n ON (n.id = obje.objectType)"
+        )
+    ),
+    ("guid", (
+        "",
+        ""
+        )
+    ),
+    ("count", (
+        "SELECT count(DISTINCT q1.objGuid) as total FROM (",
+        ") as q1"
+        )
+    ),
+    ("agg_count", (
+        "SELECT count(DISTINCT obj0.guid) as total FROM objects obj0",
+        ""
+        )
+    ),
+    ("agg_sumcount", (
+        "SELECT sum(m0_0.integerValue) as total, count(DISTINCT obj0.guid) as count FROM objects obj0",
+        ""
+        )
+     ),
+     ("aggbyobj_count", (
+        "SELECT q1.objGuid, n.string, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled, q1.grzCount FROM (",
+        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid) INNER JOIN names n ON (n.id = obje.objectType)"
+        )
+     ),
+     ("aggbyobj_sumcount", (
+        "SELECT q1.objGuid, n.string, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled, q1.grzCount, q1.grzSum FROM (",
+        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid) INNER JOIN names n ON (n.id = obje.objectType)"
+        )
+     )
+  ]   
                    
 grzQueryWhereFragments :: GrzHandle 
     -> [GrzQueryDefItem]

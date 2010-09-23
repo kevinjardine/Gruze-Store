@@ -67,7 +67,7 @@ module Data.Store.Gruze (
     -- object query API
     
     -- types
-    GrzQueryDef, GrzRelDir(..), GrzRef(..),
+    GrzQueryDef, GrzRelDir(..), GrzRef(..), GrzOrderBy(..),
     
     -- classes
     GrzQueryTypeClass(hasIn,hasBetween,hasOp),
@@ -110,8 +110,8 @@ module Data.Store.Gruze (
     
     -- query functions
     getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
-    getObjCount, getObjAggCount, getObjAggSumCount, getObjAggByObjCount,
-    getObjAggByObjSumCount, setSearchable,
+    getObjCount, getObjAggSumCount, getObjAggByObjCount, getObjAggByObjSumCount, 
+    setSearchable,
     
     -- create, save, delete, disable, enable and load
     createObj, saveObj, delObj, disableObj, enableObj,

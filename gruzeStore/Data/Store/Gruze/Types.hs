@@ -128,4 +128,9 @@ data GrzRelDir = ForwardRel | BackwardRel
     
 data GrzRef =  ObjRef | ContainerRef | OwnerRef | SiteRef
     deriving Eq
+    
+data GrzOrderBy = GuidAsc | GuidDesc | TimeCreatedAsc | TimeCreatedDesc
+        | TimeUpdatedAsc | TimeUpdatedDesc | StringAsc String | StringDesc String
+        | IntAsc String | IntDesc String
+        | CountAsc | CountDesc | SumAsc | SumDesc | AvgAsc | AvgDesc
  
