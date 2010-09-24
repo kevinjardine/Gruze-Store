@@ -38,9 +38,7 @@ grzQuery grzH query values =
         
 grzCommit :: GrzHandle -> IO ()
 grzCommit grzH = commit (grzDatabaseHandle grzH)
-
--- TODO: consider having log levels (eg. debug, notify, warning, error)
-   
+  
 logLevelToString = [    (DebugLogLevel,"DEBUG"),
                         (NotificationLogLevel,"NOTIFICATION"),
                         (WarningLogLevel,"WARNING"),

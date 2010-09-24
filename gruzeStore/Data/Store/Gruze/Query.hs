@@ -109,6 +109,25 @@ queryResultToObjs :: ([[SqlValue]],([(String,Int)],[[SqlValue]]))
 queryResultToObjs (r, (n,mr)) = map (queryRowToObj mq) r
     where
         mq =  metadataQueryToAtomBoxDict n mr
+        
+orderByToString :: GrzQueryDefItem -> [String]
+orderByToString (GrzQDOrderBy _ s) = [s]
+orderByToString _ = []
+
+getOrderBy :: [GrzQueryDefItem] -> String
+getOrderBy q =
+    " ORDER BY " ++ if null ob then "objGuid " else ob ++ " "
+    where ob = intercalate ", " $ concatMap orderByToString q
+    
+groupByToString :: GrzQueryDefItem -> [String]
+groupByToString (GrzQDGroupBy _ s) = [s]
+groupByToString _ = []
+
+getGroupBy :: [GrzQueryDefItem] -> String
+getGroupBy q =
+    " GROUP BY objGuid" ++ if null gb then " " else ", " ++ gb ++ " "
+    where
+        gb = intercalate ", " $ concatMap groupByToString q 
 
 needToString :: GrzQueryDefItem -> [String]
 needToString (GrzQDNeeds x _) = [x]
@@ -118,7 +137,7 @@ getQueryNeeds :: [GrzQueryDefItem] -> [String]
 getQueryNeeds q = concatMap needToString q
 
 joinToString :: Int -> Maybe Int -> GrzQueryDefItem -> [String]
-joinToString m (Just _) (GrzQDJoin n x) = if n >= m-1 then ["LEFT JOIN " ++ x] else ["INNER JOIN " ++ x]
+joinToString m (Just _) (GrzQDJoin n x) = if n == m then ["LEFT JOIN " ++ x] else ["INNER JOIN " ++ x]
 joinToString m Nothing (GrzQDJoin n x) = ["INNER JOIN " ++ x]
 joinToString _ _ _ = []
 
@@ -195,7 +214,14 @@ grzGetQuery grzH ((m,n), q) =
                     ++ aggTypeWhere
                     ++ aggNameWhere
                     ++ " " 
-                    ++ suffix), queryType), d),
+                    ++ (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount]
+                            then
+                                ""
+                            else
+                                (getGroupBy q) ++ (getOrderBy q)
+                    )
+                    ++ suffix
+                    ), queryType), d),
                    (needs, (concatMap fst qv, concatMap snd qv)) )
     where
         whereBit = getQueryWheres q m maybeAggByObjQueryTypeID
@@ -240,15 +266,17 @@ grzGetQuery grzH ((m,n), q) =
                         then "" 
                         else if isJust maybeAggByObjQueryNameID 
                                 then
-                                    "SELECT " ++ agg ++ " AS objGuid, count(ma.id) AS grzCount, "
-                                        ++ "sum(ma.integerValue) AS grzSum FROM objects obj0 "
+                                    "SELECT " ++ agg ++ " AS objGuid, count(DISTINCT ma.id) AS grzCount, "
+                                        ++ "sum(DISTINCT ma.integerValue) AS grzSum FROM objects obj0 "
                                 else
-                                    "SELECT " ++ agg ++ " AS objGuid, count(obj" ++ (show m) 
+                                    "SELECT " ++ agg ++ " AS objGuid, count(DISTINCT obj" ++ (show m) 
                                         ++ ".guid) AS grzCount FROM objects obj0 "
-        suffix = (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
-                        then ""
-                        else " GROUP BY " ++ agg ++ " ")
-                    ++ (snd sqlFrags)
+--         suffix = (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
+--                         then ""
+--                         else " GROUP BY " ++ agg ++ " ")
+--                     ++ (snd sqlFrags)
+
+        suffix = snd sqlFrags
                     
 sqlDict = [
     ("full",(

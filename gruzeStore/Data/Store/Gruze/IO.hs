@@ -474,12 +474,12 @@ setSearchable grzH w ns = do
         deleteQuery = "DELETE FROM searchable WHERE typeID = ?"
         insertQuery = "INSERT INTO searchable(typeID, nameID) values (?,?)"        
 
-getOrderBit grzH query orderBy = do
-    orderList <- mapM (getOrderBy grzH (getHandleDict query)) orderBy'
-    let orderBit = (concatMap snd orderList) ++ " ORDER BY " ++ (intercalate "," $ map fst orderList)
-    return orderBit
-    where
-        orderBy' = if null orderBy then [GuidDesc] else orderBy  
+-- getOrderBit grzH query orderBy = do
+--     orderList <- mapM (getOrderBy grzH (getHandleDict query)) orderBy'
+--     let orderBit = (concatMap snd orderList) ++ " ORDER BY " ++ (intercalate "," $ map fst orderList)
+--     return orderBit
+--     where
+--         orderBy' = if null orderBy then [GuidDesc] else orderBy  
                     
 {-|
   getUnwrappedObjs runs a query definition and retrieves a list of 
@@ -494,9 +494,8 @@ getUnwrappedObjs :: GrzHandle           -- ^ data handle
     -> IO [GrzObj]                      -- ^ list of objects
 getUnwrappedObjs grzH queryDefs orderBy offset limit =
     do
-        query <- grzCreateQuery grzH queryDefs
-        orderBit <- getOrderBit grzH query orderBy
-        result <- runQuery grzH $ (addToQuery limitBit) . (addToQuery orderBit) $ query
+        query <- grzCreateQuery grzH ((setOrderBy orderBy) . queryDefs)
+        result <- runQuery grzH $ addToQuery limitBit query
         return $ queryResultToObjs result
     where
         limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)     
@@ -516,9 +515,8 @@ getObjs :: GrzObjClass o =>
     -> IO [o]                           -- ^ list of objects
 getObjs grzH w queryDefs orderBy offset limit =
     do
-        query <- grzCreateQuery grzH ((hasType w) . queryDefs)
-        orderBit <- getOrderBit grzH query orderBy
-        result <- runQuery grzH $ (addToQuery limitBit) . (addToQuery orderBit) $ query 
+        query <- grzCreateQuery grzH ((setOrderBy orderBy).(hasType w) . queryDefs)
+        result <- runQuery grzH $ addToQuery limitBit query 
         return $ map w (queryResultToObjs result)
     where
         limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
@@ -535,9 +533,8 @@ getObjIDs :: GrzHandle                  -- ^ data handle
     -> IO [Int]                         -- ^ list of object IDs
 getObjIDs grzH queryDefs orderBy offset limit =
     do
-        query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTID))
-        orderBit <- getOrderBit grzH query orderBy
-        result <- runQuery grzH $ (addToQuery orderBit) . (addToQuery limitBit) $ query
+        query <- grzCreateQuery grzH ((setOrderBy orderBy) . queryDefs . (setQueryType GrzQTID))
+        result <- runQuery grzH $ addToQuery limitBit query
         return $ map (\x -> fromSql $ head x) (fst result)
     where
         limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
@@ -606,9 +603,8 @@ getObjAggByObjCount grzH w1 w2 queryDefs orderBy limit offset =
         case t2 of
             Nothing -> return []
             Just (_,i2) -> do
-                query <- grzCreateQuery grzH ((hasType w1) . queryDefs . (setQueryType (GrzQTAggByObjCount i2)))
-                orderBit <- getOrderBit grzH query orderBy
-                result <- runQuery grzH $ (addToQuery limitBit) . (addToQuery orderBit) $ query 
+                query <- grzCreateQuery grzH ((setAggOrderBy orderBy) . (hasType w1) . queryDefs . (setQueryType (GrzQTAggByObjCount i2)))
+                result <- runQuery grzH $ addToQuery limitBit query 
                 return $ queryResultToAggByObjCount w2 result
    where
         limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
@@ -638,9 +634,8 @@ getObjAggByObjSumCount grzH name w1 w2 queryDefs orderBy limit offset =
                 case mn of
                     Nothing -> return []
                     Just (_,n) -> do
-                        query <- grzCreateQuery grzH ((hasType w1) . queryDefs . (setQueryType (GrzQTAggByObjSumCount i2 n)))
-                        orderBit <- getOrderBit grzH query orderBy
-                        result <- runQuery grzH $ (addToQuery limitBit) . (addToQuery orderBit) $ query 
+                        query <- grzCreateQuery grzH ((setAggOrderBy orderBy) . (hasType w1) . queryDefs . (setQueryType (GrzQTAggByObjSumCount i2 n)))
+                        result <- runQuery grzH $ addToQuery limitBit query 
                         return $ queryResultToAggByObjSumCount w2 result
    where
         limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
@@ -660,49 +655,49 @@ getObjAggSumCount grzH queryDefs name =
         result <- runQuery grzH query
         return $ queryResultToSumCount result
         
-getOrderBy :: GrzHandle -> [(String,Int)] -> GrzOrderBy -> IO (String, String)
-getOrderBy grzH hd ob = do
-    md <- case ob of
-            StringAsc s -> getMetadataBitsForOrderBy grzH hd s ".stringValue"
-            StringDesc s -> getMetadataBitsForOrderBy grzH hd s ".stringValue"
-            IntAsc s -> getMetadataBitsForOrderBy grzH hd s ".integerValue"
-            IntDesc s -> getMetadataBitsForOrderBy grzH hd s ".integerValue"
-            otherwise -> return ("","")
-        
-    let r = case ob of
-                GuidAsc -> "objGuid ASC"
-                GuidDesc -> "objGuid DESC"
-                TimeCreatedAsc -> "timeCreated ASC"
-                TimeCreatedDesc -> "timeCreated Desc"
-                TimeUpdatedAsc -> "timeUpdated ASC"
-                TimeUpdatedDesc -> "timeUpdated DESC"
-                StringAsc _ -> (fst md) ++ " ASC"
-                StringDesc _ -> (fst md) ++ " DESC"
-                IntAsc _ -> (fst md) ++ " ASC"
-                IntDesc _ -> (fst md) ++ " DESC"
-                CountAsc -> "grzCount ASC"
-                CountDesc -> "grzCount DESC"
-                SumAsc -> "grzSum ASC"
-                SumDesc -> "grzSum DESC"
-                -- TODO: AvgAsc and AvgDesc
-    return (r,snd md)
+-- getOrderBy :: GrzHandle -> [(String,Int)] -> GrzOrderBy -> IO (String, String)
+-- getOrderBy grzH hd ob = do
+--     md <- case ob of
+--             StringAsc s -> getMetadataBitsForOrderBy grzH hd s ".stringValue"
+--             StringDesc s -> getMetadataBitsForOrderBy grzH hd s ".stringValue"
+--             IntAsc s -> getMetadataBitsForOrderBy grzH hd s ".integerValue"
+--             IntDesc s -> getMetadataBitsForOrderBy grzH hd s ".integerValue"
+--             otherwise -> return ("","")
+--         
+--     let r = case ob of
+--                 GuidAsc -> "objGuid ASC"
+--                 GuidDesc -> "objGuid DESC"
+--                 TimeCreatedAsc -> "timeCreated ASC"
+--                 TimeCreatedDesc -> "timeCreated Desc"
+--                 TimeUpdatedAsc -> "timeUpdated ASC"
+--                 TimeUpdatedDesc -> "timeUpdated DESC"
+--                 StringAsc _ -> (fst md) ++ " ASC"
+--                 StringDesc _ -> (fst md) ++ " DESC"
+--                 IntAsc _ -> (fst md) ++ " ASC"
+--                 IntDesc _ -> (fst md) ++ " DESC"
+--                 CountAsc -> "grzCount ASC"
+--                 CountDesc -> "grzCount DESC"
+--                 SumAsc -> "grzSum ASC"
+--                 SumDesc -> "grzSum DESC"
+--                 -- TODO: AvgAsc and AvgDesc
+--     return (r,snd md)
 
-    -- uses a string handle in the handle dict if available
-    -- otherwise looks it up
-    -- and if not available, logs a warning
-    -- and returns "q1.guid"
-    
-getMetadataBitsForOrderBy :: GrzHandle ->  [(String,Int)] -> String -> String -> IO (String,String)       
-getMetadataBitsForOrderBy grzH hd s field = do
-    h <- case lookup s hd of
-            Just i -> return $ Just (s,i)
-            Nothing -> maybeGetStringHandle grzH s
-    let r = case h of
-                Nothing -> ("objGuid","")
-                Just (_,i) -> ("max(mob" ++ field ++ ")", 
-                    ("INNER JOIN metadata mob ON(mob.objectGuid = objGuid) WHERE " 
-                    ++ "mob.nameId = " ++ (show i) ++ " GROUP BY mob.objectGuid "))
-    return r
+--     -- uses a string handle in the handle dict if available
+--     -- otherwise looks it up
+--     -- and if not available, logs a warning
+--     -- and returns "q1.guid"
+--     
+-- getMetadataBitsForOrderBy :: GrzHandle ->  [(String,Int)] -> String -> String -> IO (String,String)       
+-- getMetadataBitsForOrderBy grzH hd s field = do
+--     h <- case lookup s hd of
+--             Just i -> return $ Just (s,i)
+--             Nothing -> maybeGetStringHandle grzH s
+--     let r = case h of
+--                 Nothing -> ("objGuid","")
+--                 Just (_,i) -> ("max(mob" ++ field ++ ")", 
+--                     ("INNER JOIN metadata mob ON(mob.objectGuid = objGuid) WHERE " 
+--                     ++ "mob.nameId = " ++ (show i) ++ " GROUP BY mob.objectGuid "))
+--     return r
                        
 -- utilities
 

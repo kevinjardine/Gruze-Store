@@ -320,13 +320,14 @@ main = do
     
     rabosc2 <- getObjAggByObjSumCount grzH "value" Rating BlogPost
                 (   (hasOp "value" ">=" 4)
-                    . (hasRel "-hasContainer") 
+                    . (hasRel "-hasContainer")
+                    . (hasData "tags") 
                     . (hasRel "-hasContainer")
                     . (hasType Blog)
                     . (hasRel "-hasContainer")
                     . (withObj teacherCollection)
                 )
-                [SumDesc] 0 0
+                [] 0 0
             
     putStrLn $ concatMap (\(o,(s,c)) -> 
                 ("(" ++ (ppObj o) ++ "," ++ (show s) ++ "," ++ (show c) ++ ")\n")
@@ -438,7 +439,7 @@ rateBlogPost grzH post rater rating = do
 -- as the types are unclear, returns unwrapped objects                    
 searchForContent :: GrzHandle -> User -> String -> IO [GrzObj]
 searchForContent grzH user s = do
-    getUnwrappedObjs grzH qd [] 0 0
+    getUnwrappedObjs grzH qd [GuidAsc] 0 0
     where
         qd = hasPermission user "View" ((hasSearchable s) . (hasEnabled))
 

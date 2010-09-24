@@ -33,9 +33,8 @@ hasData,
 -- return objects with the given metadata in the results
 withData,
 
--- an internal function needed by the IO module
--- TODO: hide this
-setQueryType
+-- internal functions needed by the IO module
+setQueryType, setOrderBy, setAggOrderBy
 
 ) where
 
@@ -46,15 +45,73 @@ import Data.List (intercalate, foldl')
 import Data.Maybe
 import Data.Typeable
 
--- TODO: add order functions
--- need order by sum, count and avg as well
-
 grzMakeQueryDefName :: String -> GrzQDWFItem
 grzMakeQueryDefName s = GrzQDName s
+
+-- some private query functions
 
 setQueryType :: GrzQueryType -> GrzQueryDef -> GrzQueryDef
 setQueryType t ((m,n),x) =
     ((m,n), (GrzQDType t) : x)
+    
+setOrderBy :: [GrzOrderBy] -> GrzQueryDef -> GrzQueryDef
+setOrderBy (ob:obs) = (setOrderBy obs) . (setOrderByItem ob False)
+setOrderBy [] = id
+
+setAggOrderBy :: [GrzOrderBy] -> GrzQueryDef -> GrzQueryDef
+setAggOrderBy (ob:obs) = (setAggOrderBy obs) . (setOrderByItem ob True)
+setAggOrderBy [] = id
+
+setOrderByItem ob isAgg =
+    case ob of
+        StringAsc s -> setOrderByMetadataItem ob s isAgg
+        StringDesc s -> setOrderByMetadataItem ob s isAgg
+        IntAsc s -> setOrderByMetadataItem ob s isAgg
+        IntDesc s -> setOrderByMetadataItem ob s isAgg
+        otherwise -> setOrderByOrdinaryItem ob
+        
+setOrderByOrdinaryItem ob ((m,n),x) =
+    ((m,n),(GrzQDOrderBy m (getOrderBit ob n)) :x)       
+
+setOrderByMetadataItem :: GrzOrderBy -> String -> Bool -> GrzQueryDef -> GrzQueryDef
+setOrderByMetadataItem ob s isAgg ((m,n),x) =
+    ((m,n+1),(GrzQDOrderBy realM (getOrderBit ob n))
+    : (GrzQDGroupBy realM ("mob" ++ (show n) ++ ".objectGuid"))
+    : (GrzQDJoin realM ("metadata mob" ++ (show n) ++ " ON (mob" ++ (show n) ++ ".objectGuid = " ++ obj ++ ")")) 
+    : (GrzQDWhereFrags realM
+            (
+                [GrzQDString 
+                    ("mob" ++ (show n) ++  ".nameId = "
+                    )
+                 ] 
+                ++ [GrzQDName s] 
+            )
+        )
+      : x)
+    where
+        realM = (if isAgg then m-1 else m)
+        obj = "obj" ++ (show realM) ++ ".guid"
+
+getOrderBit :: GrzOrderBy -> Int -> String
+getOrderBit ob n =
+    case ob of
+        GuidAsc -> "objGuid ASC"
+        GuidDesc -> "objGuid DESC"
+        TimeCreatedAsc -> "timeCreated ASC"
+        TimeCreatedDesc -> "timeCreated Desc"
+        TimeUpdatedAsc -> "timeUpdated ASC"
+        TimeUpdatedDesc -> "timeUpdated DESC"
+        StringAsc _ -> "max(mob" ++ (show n) ++ ".stringValue) ASC"
+        StringDesc _ -> "max(mob" ++ (show n) ++ ".stringValue) DESC"
+        IntAsc _ -> "max(mob" ++ (show n) ++ ".integerValue) ASC"
+        IntDesc _ -> "max(mob" ++ (show n) ++ ".integerValue) DESC"
+        CountAsc -> "grzCount ASC"
+        CountDesc -> "grzCount DESC"
+        SumAsc -> "grzSum ASC"
+        SumDesc -> "grzSum DESC"
+        -- TODO: AvgAsc and AvgDesc
+
+-- the public query functions
 
 withObjs :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef  
 withObjs objList ((m,n), x) =
@@ -135,7 +192,7 @@ handleRelSpecial :: String
     -> GrzQueryDef
 handleRelSpecial rel dir ((m,n), x) =
     ((m+1,n),
-        (GrzQDJoin m ("objects obj" ++ (show (m+1)) ++ " ON (obj"
+        (GrzQDJoin (m+1) ("objects obj" ++ (show (m+1)) ++ " ON (obj"
             ++ (show m) ++ guidA ++ " = obj" ++ (show (m+1)) ++ guidB ++ ")"))
          : x)
     where
@@ -157,7 +214,7 @@ handleRel :: String
     -> GrzQueryDef
 handleRel rel dir ((m,n), x) =
     ((m+1,n),
-        (GrzQDJoin m ("objects obj" ++ (show (m+1)) ++ " ON (r"
+        (GrzQDJoin (m+1) ("objects obj" ++ (show (m+1)) ++ " ON (r"
             ++ (show m) ++ guidB ++ " = obj" ++ (show (m+1)) ++ ".guid)"))
         : (GrzQDJoin m ("relationships r" ++ (show m) ++ " ON (r"
             ++ (show m) ++ guidA ++ " = obj" ++ (show m) ++ ".guid)"))
@@ -298,7 +355,8 @@ normaliseOp = [("in", "IN"),("In","IN"),("IN","IN"),("iN","IN"),("><","><") ,
     ("<","<"),("<=","<="),("=","="),(">",">"),(">=",">="),("match","match")]
                         
 -- generate the condition bit
--- TODO: handle other conditions?        
+-- TODO: handle other conditions?
+-- eg. inclusive between        
 getOpBit :: String -> String -> [GrzAtom] -> String
 getOpBit "IN" var atoms = " ( " ++ var ++ " IN (" ++ (intercalate "," $ map toMark atoms) ++ ")) "
 getOpBit "><" var _ = " ( " ++ var ++ " > ? AND " ++ var ++ " < ? ) "

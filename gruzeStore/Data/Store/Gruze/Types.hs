@@ -24,6 +24,8 @@ data GrzQueryDefItem =
         | GrzQDWhere Int String 
         | GrzQDJoin Int String 
         | GrzQDWhereFrags Int [GrzQDWFItem]
+        | GrzQDOrderBy Int String
+        | GrzQDGroupBy Int String
         | GrzQDNeeds String Int
         | GrzQDSelect String
         | GrzQDGroup String
