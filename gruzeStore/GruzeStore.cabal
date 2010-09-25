@@ -13,9 +13,30 @@ cabal-version:      >= 1.6
 build-type:         Simple
 homepage:           http://gruze.org
 hs-source-dirs:     .
-build-depends:      base >= 4 && < 5, containers, split, HDBC, HDBC-odbc, bytestring, 
-                    old-time, time, old-locale, random, process, directory, template-haskell
-exposed-modules:    Data.Store.Gruze, Data.Store.Gruze.Templates
-other-modules:      Data.Store.Gruze.Types,Data.Store.Gruze.Box, Data.Store.Gruze.IO, Data.Store.Gruze.QueryDef,
-                    Data.Store.Gruze.DBTypes, Data.Store.Gruze.Utility, Data.Store.Gruze.Query,
+build-depends:      base >= 4 && < 5, containers, split, HDBC,
+
+                    -- uncomment one of these three
+                    HDBC-sqlite3,
+                    -- HDBC-odbc,
+                    -- HDBC-postgresql, 
+                    
+                    bytestring, old-time, time, old-locale, random, process, directory, 
+                    template-haskell
+                    
+exposed-modules:    Data.Store.Gruze,
+                    Data.Store.Gruze.Templates
+                    
+other-modules:      Data.Store.Gruze.Types,
+                    Data.Store.Gruze.Box,
+                    Data.Store.Gruze.IO,
+                    Data.Store.Gruze.QueryDef,
+                    Data.Store.Gruze.Utility,
+                    Data.Store.Gruze.Query,
+                    
+                    -- uncomment one of these three Connection options
+                    Data.Store.Gruze.Connection.Sqlite3,
+                    -- Data.Store.Gruze.Connection.ODBC,
+                    -- Data.Store.Gruze.Connection.PostgreSQL,                    
+                    
                     Data.Store.Gruze.Handles
+                    

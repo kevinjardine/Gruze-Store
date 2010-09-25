@@ -5,10 +5,8 @@ where
 import Data.Store.Gruze.Utility
 import Data.Store.Gruze.Box
 import Data.Store.Gruze.Types
-import Data.Store.Gruze.DBTypes
 
 import Database.HDBC
-import Database.HDBC.ODBC
 import Data.List (intercalate)
 import qualified Data.Map as Map
 import Data.Maybe
@@ -78,8 +76,7 @@ makeStringHandle :: GrzHandle -> String -> Int -> IO Int
 makeStringHandle grzH s hash_s =
     do
         val <- grzQuery grzH query [toSql s, toSql hash_s]
-        result <- grzQuery grzH "SELECT LAST_INSERT_ID() AS id" []
-        return ((fromSql (head (head result)))::Int)
+        getLastInsertId grzH
     where
         query = "INSERT INTO names(string,hash) values(?,?)"
 
@@ -90,8 +87,7 @@ makeStringHandle grzH s hash_s =
 getFileHandle :: GrzHandle -> String -> String -> String -> String -> Int -> IO Int
 getFileHandle grzH ofn ct locd locf time = do
         val <- grzQuery grzH query [toSql ofn, toSql ct, toSql locd, toSql locf, toSql time]
-        result <- grzQuery grzH "SELECT LAST_INSERT_ID() AS id" []
-        return ((fromSql (head (head result)))::Int)
+        getLastInsertId grzH
     where
         query = "INSERT INTO files(originalName,contentType,locationDir,locationFile,timeCreated) values(?,?,?,?,?)"
         

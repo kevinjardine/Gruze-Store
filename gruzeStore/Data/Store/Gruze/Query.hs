@@ -6,12 +6,10 @@ where
 
 import Data.Store.Gruze.Types
 import Data.Store.Gruze.Box
-import Data.Store.Gruze.DBTypes
 import Data.Store.Gruze.Handles
 import Data.Store.Gruze.Utility
 
 import Database.HDBC
-import Database.HDBC.ODBC
 import Data.List (intercalate, foldl')
 import qualified Data.Map as Map
 import Data.Maybe
@@ -125,7 +123,7 @@ groupByToString _ = []
 
 getGroupBy :: [GrzQueryDefItem] -> String
 getGroupBy q =
-    " GROUP BY objGuid" ++ if null gb then " " else ", " ++ gb ++ " "
+    " GROUP BY objGuid, n.string" ++ if null gb then " " else ", " ++ gb ++ " "
     where
         gb = intercalate ", " $ concatMap groupByToString q 
 
@@ -204,6 +202,7 @@ grzGetQuery grzH ((m,n), q) =
                     ++ " "
                     ++ (intercalate " " (reverse $ getQueryJoins q m maybeAggByObjQueryTypeID))
                     ++ aggNameJoin
+                    ++ typeStringJoin
                     ++ (if (null whereBit) && (null frags)
                             then ""
                             else (" WHERE " 
@@ -214,7 +213,7 @@ grzGetQuery grzH ((m,n), q) =
                     ++ aggTypeWhere
                     ++ aggNameWhere
                     ++ " " 
-                    ++ (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount]
+                    ++ (if queryType `elem` [GrzQTCount,GrzQTAggSumCount]
                             then
                                 ""
                             else
@@ -238,7 +237,11 @@ grzGetQuery grzH ((m,n), q) =
         agg = "obj" ++ (show $ if isJust maybeAggByObjQueryTypeID 
                                 then m-1 
                                 else m)
-                    ++ ".guid"
+        typeStringJoin = if queryType `elem` [GrzQTCount,GrzQTAggSumCount]
+                            then
+                                ""
+                            else
+                                " INNER JOIN names n ON (n.id = " ++ agg ++ ".objectType) " 
         -- possibly add type and metadata constraints for the objects being aggregated
         aggTypeWhere = case maybeAggByObjQueryTypeID of
                         Just i -> " AND obj" ++ (show (m-1)) 
@@ -256,7 +259,6 @@ grzGetQuery grzH ((m,n), q) =
                     GrzQTCount                  -> "count"
                     GrzQTID                     -> "guid"
                     GrzQTFull                   -> "full"
-                    GrzQTAggCount               -> "agg_count"
                     GrzQTAggSumCount            -> "agg_sumcount"
                     GrzQTAggByObjCount _        -> "aggbyobj_count"
                     GrzQTAggByObjSumCount _ _   -> "aggbyobj_sumcount"
@@ -266,11 +268,14 @@ grzGetQuery grzH ((m,n), q) =
                         then "" 
                         else if isJust maybeAggByObjQueryNameID 
                                 then
-                                    "SELECT " ++ agg ++ " AS objGuid, count(DISTINCT ma.id) AS grzCount, "
+                                    "SELECT " ++ agg ++ ".guid AS objGuid, n.string as typeString, count(DISTINCT ma.id) AS grzCount, "
                                         ++ "sum(DISTINCT ma.integerValue) AS grzSum FROM objects obj0 "
-                                else
-                                    "SELECT " ++ agg ++ " AS objGuid, count(DISTINCT obj" ++ (show m) 
-                                        ++ ".guid) AS grzCount FROM objects obj0 "
+                                else if queryType == GrzQTCount
+                                        then
+                                            "SELECT " ++ agg ++ ".guid AS objGuid FROM objects obj0 "
+                                        else
+                                            "SELECT " ++ agg ++ ".guid AS objGuid, n.string as typeString, count(DISTINCT obj" ++ (show m) 
+                                                ++ ".guid) AS grzCount FROM objects obj0 "
 --         suffix = (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
 --                         then ""
 --                         else " GROUP BY " ++ agg ++ " ")
@@ -280,8 +285,8 @@ grzGetQuery grzH ((m,n), q) =
                     
 sqlDict = [
     ("full",(
-        "SELECT q1.objGuid, n.string, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled FROM (",
-        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid) INNER JOIN names n ON (n.id = obje.objectType)"
+        "SELECT q1.objGuid, q1.typeString, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled FROM (",
+        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid)"
         )
     ),
     ("guid", (
@@ -305,13 +310,13 @@ sqlDict = [
         )
      ),
      ("aggbyobj_count", (
-        "SELECT q1.objGuid, n.string, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled, q1.grzCount FROM (",
-        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid) INNER JOIN names n ON (n.id = obje.objectType)"
+        "SELECT q1.objGuid, q1.typeString, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled, q1.grzCount FROM (",
+        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid)"
         )
      ),
      ("aggbyobj_sumcount", (
-        "SELECT q1.objGuid, n.string, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled, q1.grzCount, q1.grzSum FROM (",
-        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid) INNER JOIN names n ON (n.id = obje.objectType)"
+        "SELECT q1.objGuid, q1.typeString, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled, q1.grzCount, q1.grzSum FROM (",
+        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid)"
         )
      )
   ]   
@@ -383,7 +388,7 @@ qwfItemToMaybeString grzH item =
                                                         else do
                                                             let ic2 = if null ic then [] else [ic]
                                                             let bc2 = if null bc then [] else [bc]
-                                                            let sc2 = if null sc then [] else [sc]
+                                                            let sc2 = if null sc then [] else [transformStringClause grzH sc]
                                                             let c = intercalate " OR " $ concat [ic2, bc2, sc2]
                                                             return $ Just ((" (" ++ c ++ ")",[]), (i ++ b, s))
                                                 else

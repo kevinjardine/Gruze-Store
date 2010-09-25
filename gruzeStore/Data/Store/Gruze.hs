@@ -14,6 +14,7 @@ module Data.Store.Gruze (
     
     -- types
     GrzAtom, GrzAtomBox, GrzObjBox, GrzInt, GrzString, GrzKey, GrzLogLevel(..),
+    GrzDatabaseType(..),
 
     -- atom converters
     atomToString, maybeAtomToString, safeAtomToString, forceAtomToString, 

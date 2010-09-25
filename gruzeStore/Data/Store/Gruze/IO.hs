@@ -30,10 +30,10 @@ import Data.Store.Gruze.QueryDef
 import Data.Store.Gruze.Handles
 import Data.Store.Gruze.Query
 import Data.Store.Gruze.Utility
-import Data.Store.Gruze.DBTypes
 
 import Database.HDBC
-import Database.HDBC.ODBC
+-- import Database.HDBC.ODBC
+--import Database.HDBC.Sqlite3
 import Data.Char (isSpace)
 import Data.List (intercalate)
 import Data.Time.Clock.POSIX
@@ -71,21 +71,6 @@ getHandleDict _ = []
 -- the Object IO functions
 
 -- handle functions
-
--- gets the handle
-getHandle :: (GrzAtomBox -> GrzAtomBox) -> IO GrzHandle   
-getHandle c = do
-    let config = c emptyAtomBox
-    dbc <- getDatabaseConnection config
-    return $ GrzHandle {
-            grzDatabaseHandle = dbc,
-            grzDataDirectory = getString "grzDataDirectory" "" config,
-            grzConvertLocation = getString "grzConvertLocation" "" config,
-            grzLogFile = getString "grzLogFile" "" config,
-            grzDefaultSite = emptyBareObj,
-            grzThumbDefs = [],
-            grzLogLevel = WarningLogLevel
-        }
         
 setDefaultSite :: GrzSiteClass os => os -> GrzHandle -> GrzHandle
 setDefaultSite site grzH  =               
@@ -154,8 +139,7 @@ createObj grzH w p =
         let time = floor ptime
         h <- getStringHandle grzH t
         val <- grzQuery grzH query $ map toSql [h,ownerID,containerID,siteID,time,time,enabled]
-        qs <- grzQuery grzH "SELECT LAST_INSERT_ID() AS id" []
-        let guid = ((fromSql (head (head qs)))::Int)
+        guid <- getLastInsertId grzH
         let theObj = obj {
             objID = guid,
             objType = t,
@@ -278,7 +262,8 @@ delObj grzH obj = do
         then do
             grzCommit grzH
             return r
-        else
+        else do
+            grzRollback grzH
             return r
 
 delObjByID :: GrzHandle -> Int -> IO Bool
@@ -498,7 +483,7 @@ getUnwrappedObjs grzH queryDefs orderBy offset limit =
         result <- runQuery grzH $ addToQuery limitBit query
         return $ queryResultToObjs result
     where
-        limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)     
+        limitBit = getLimitBit grzH offset limit     
           
 {-|
   getObjs runs a query definition and retrieves a list of objects with the
@@ -519,7 +504,7 @@ getObjs grzH w queryDefs orderBy offset limit =
         result <- runQuery grzH $ addToQuery limitBit query 
         return $ map w (queryResultToObjs result)
     where
-        limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
+        limitBit = getLimitBit grzH offset limit
                 
 {-|
   getObjIDs runs a query definiton and retrieves a list of object ids from the
@@ -537,7 +522,7 @@ getObjIDs grzH queryDefs orderBy offset limit =
         result <- runQuery grzH $ addToQuery limitBit query
         return $ map (\x -> fromSql $ head x) (fst result)
     where
-        limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
+        limitBit = getLimitBit grzH offset limit
         
 {-|
   getBareObjs runs a query definition and retrieves a list of bare objects
@@ -607,7 +592,7 @@ getObjAggByObjCount grzH w1 w2 queryDefs orderBy limit offset =
                 result <- runQuery grzH $ addToQuery limitBit query 
                 return $ queryResultToAggByObjCount w2 result
    where
-        limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
+        limitBit = getLimitBit grzH offset limit
         
 {-|
   The 'getObjAggByObjSumCount' function takes a query definition, a metadata 
@@ -638,7 +623,7 @@ getObjAggByObjSumCount grzH name w1 w2 queryDefs orderBy limit offset =
                         result <- runQuery grzH $ addToQuery limitBit query 
                         return $ queryResultToAggByObjSumCount w2 result
    where
-        limitBit = if limit == 0 then "" else " LIMIT " ++ (show offset) ++ "," ++ (show limit)
+        limitBit = getLimitBit grzH offset limit
         
 {-|
   The 'getObjAggSumCount' function takes a query definition and a metadata name.
@@ -654,51 +639,7 @@ getObjAggSumCount grzH queryDefs name =
         query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggSumCount) . (hasData name))
         result <- runQuery grzH query
         return $ queryResultToSumCount result
-        
--- getOrderBy :: GrzHandle -> [(String,Int)] -> GrzOrderBy -> IO (String, String)
--- getOrderBy grzH hd ob = do
---     md <- case ob of
---             StringAsc s -> getMetadataBitsForOrderBy grzH hd s ".stringValue"
---             StringDesc s -> getMetadataBitsForOrderBy grzH hd s ".stringValue"
---             IntAsc s -> getMetadataBitsForOrderBy grzH hd s ".integerValue"
---             IntDesc s -> getMetadataBitsForOrderBy grzH hd s ".integerValue"
---             otherwise -> return ("","")
---         
---     let r = case ob of
---                 GuidAsc -> "objGuid ASC"
---                 GuidDesc -> "objGuid DESC"
---                 TimeCreatedAsc -> "timeCreated ASC"
---                 TimeCreatedDesc -> "timeCreated Desc"
---                 TimeUpdatedAsc -> "timeUpdated ASC"
---                 TimeUpdatedDesc -> "timeUpdated DESC"
---                 StringAsc _ -> (fst md) ++ " ASC"
---                 StringDesc _ -> (fst md) ++ " DESC"
---                 IntAsc _ -> (fst md) ++ " ASC"
---                 IntDesc _ -> (fst md) ++ " DESC"
---                 CountAsc -> "grzCount ASC"
---                 CountDesc -> "grzCount DESC"
---                 SumAsc -> "grzSum ASC"
---                 SumDesc -> "grzSum DESC"
---                 -- TODO: AvgAsc and AvgDesc
---     return (r,snd md)
-
---     -- uses a string handle in the handle dict if available
---     -- otherwise looks it up
---     -- and if not available, logs a warning
---     -- and returns "q1.guid"
---     
--- getMetadataBitsForOrderBy :: GrzHandle ->  [(String,Int)] -> String -> String -> IO (String,String)       
--- getMetadataBitsForOrderBy grzH hd s field = do
---     h <- case lookup s hd of
---             Just i -> return $ Just (s,i)
---             Nothing -> maybeGetStringHandle grzH s
---     let r = case h of
---                 Nothing -> ("objGuid","")
---                 Just (_,i) -> ("max(mob" ++ field ++ ")", 
---                     ("INNER JOIN metadata mob ON(mob.objectGuid = objGuid) WHERE " 
---                     ++ "mob.nameId = " ++ (show i) ++ " GROUP BY mob.objectGuid "))
---     return r
-                       
+                               
 -- utilities
 
 trimWhiteSpace :: String -> String

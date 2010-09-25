@@ -51,23 +51,11 @@ main = do
       Redefine the config parameters below to match your own MySQL and 
       file system configuration.
     -} 
-     
-    let config =
-            -- the ODBC driver string 
-            (setString "grzDBDriver" "{MySQL ODBC 3.51 Driver}")
-            
-            -- db server location (usually localhost)
-            . (setString "grzDBServer" "localhost")
-            
-            -- database name
-            . (setString "grzDBDatabase" "gruze2")
-            
-            -- database user name
-            . (setString "grzDBUID" "gruze")
-            
-            -- database password
-            . (setString "grzDBPassword" "gtest")
-            
+    
+    let configSqlite3 =
+            -- the location of the Sqlite3 file for the Gruze database 
+            (setString "grzDBFile" "d:/testdb")
+        
             -- location of data directory on file system (must be writable by Haskell)
             . (setString "grzDataDirectory" "D:/projects/haskell/storedata")
             
@@ -78,13 +66,67 @@ main = do
             
             -- location of Imagemagick convert executable on file system
             . (setString "grzConvertLocation" "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
+     
+--     let configODBC =
+--             -- the ODBC driver string 
+--             (setString "grzDBDriver" "{MySQL ODBC 3.51 Driver}")
+--             
+--             -- db server location (usually localhost)
+--             . (setString "grzDBServer" "localhost")
+--             
+--             -- database name
+--             . (setString "grzDBDatabase" "gruze2")
+--             
+--             -- database user name
+--             . (setString "grzDBUID" "gruze")
+--             
+--             -- database password
+--             . (setString "grzDBPassword" "gtest")
+--             
+--             -- location of data directory on file system (must be writable by Haskell)
+--             . (setString "grzDataDirectory" "D:/projects/haskell/storedata")
+--             
+--             -- location of log file on file system (must be writable by Haskell)
+--             -- at debug level (used in the example code below), Gruze logs a lot of 
+--             -- information (generated queries, object creation notices etc.)
+--             . (setString "grzLogFile" "D:/projects/haskell/newlog2.txt")
+--             
+--             -- location of Imagemagick convert executable on file system
+--             . (setString "grzConvertLocation" "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
+
+--     let configPostgreSQL =
+--             -- the PostgreSQL port 
+--             (setString "grzDBPort" "5432")
+--             
+--             -- db server location (usually localhost)
+--             . (setString "grzDBServer" "localhost")
+--             
+--             -- database name
+--             . (setString "grzDBDatabase" "gruze")
+--             
+--             -- database user name
+--             . (setString "grzDBUID" "gruze")
+--             
+--             -- database password
+--             . (setString "grzDBPassword" "jupiter")
+--             
+--             -- location of data directory on file system (must be writable by Haskell)
+--             . (setString "grzDataDirectory" "D:/projects/haskell/storedata")
+--             
+--             -- location of log file on file system (must be writable by Haskell)
+--             -- at debug level (used in the example code below), Gruze logs a lot of 
+--             -- information (generated queries, object creation notices etc.)
+--             . (setString "grzLogFile" "D:/projects/haskell/newlog2.txt")
+--             
+--             -- location of Imagemagick convert executable on file system
+--             . (setString "grzConvertLocation" "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
                 
     -- get handle (which opens the database connection)
     
     -- In this simple example, the handle is passed directly to all the model
     -- functions. In a more complex example, the handle could be hidden in a
     -- Reader monad or some other state monad to reduce parameter clutter          
-    grzH' <- getHandle config
+    grzH' <- getHandle configSqlite3 GrzSqlite3DB
        
     -- delete any previous test site (and all its content)
     let testSitesQd = hasIn "subtype" ["grzTest"]

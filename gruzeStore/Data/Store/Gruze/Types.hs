@@ -135,4 +135,6 @@ data GrzOrderBy = GuidAsc | GuidDesc | TimeCreatedAsc | TimeCreatedDesc
         | TimeUpdatedAsc | TimeUpdatedDesc | StringAsc String | StringDesc String
         | IntAsc String | IntDesc String
         | CountAsc | CountDesc | SumAsc | SumDesc | AvgAsc | AvgDesc
- 
+    deriving (Eq,Show)
+
+data GrzDatabaseType = GrzSqlite3DB | GrzMySQLDB | GrzPostgreSQLDB
