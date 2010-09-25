@@ -1,0 +1,51 @@
+<project version="Crimson Editor 3.60">
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Box.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\GruzeStore.cabal" />
+	<localfile path="D:\projects\haskell\gruzeTest\gruzeTest.cabal" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Handles.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\IO.hs" />
+	<localfile path="D:\projects\haskell\gruzeTest\Main.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Connection\MySQL.hs" />
+	<localfile path="D:\projects\haskell\newlog.txt" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Connection\ODBC.hs" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_agg_count.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_agg_sumcount.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_aggbyobj_count.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_count.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_full.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\prefix_query_guid.sql" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Query.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\QueryDef.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Connection\Sqlite3.hs" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_agg_count.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_agg_sumcount.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_count.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_full.sql" />
+	<localfile path="D:\projects\haskell\storedata\config\mysql\suffix_query_guid.sql" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Templates.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Types.hs" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Utility.hs" />
+</project>
+
+<workspace version="Crimson Editor 3.60">
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Utility.hs" linenum="82" placement="0:1:-1:-1:-4:-30:22:29:867:394" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\IO.hs" linenum="290" placement="0:1:-1:-1:-4:-30:44:58:889:423" />
+	<localfile path="D:\projects\haskell\gruzeStore\schema\postgresql.sql" linenum="1" placement="0:1:-1:-1:-4:-30:44:58:889:423" />
+	<localfile path="D:\projects\haskell\gruzeStore\schema\schema.sql" linenum="1" placement="0:1:-1:-1:-4:-30:66:87:911:452" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Types.hs" linenum="141" placement="0:1:-1:-1:-4:-30:88:116:933:481" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Handles.hs" linenum="132" placement="0:1:-1:-1:-4:-30:110:145:955:510" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\DBTypes.hs" linenum="1" placement="0:1:-1:-1:-4:-30:132:174:977:539" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Connection\PostgreSQL.hs" linenum="21" placement="0:1:-1:-1:-4:-30:0:0:845:365" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Connection\Sqlite3.hs" linenum="7" placement="0:1:-1:-1:-4:-30:22:29:867:394" />
+	<localfile path="D:\projects\haskell\gruzeStore\GruzeStore.cabal" linenum="38" placement="0:1:-1:-1:-4:-30:44:58:889:423" />
+	<localfile path="D:\projects\haskell\gruzeTest\Main.hs" linenum="73" placement="0:1:-1:-1:-4:-30:66:87:911:452" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\QueryDef.hs" linenum="363" placement="0:1:-1:-1:-4:-30:88:116:933:481" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Query.hs" linenum="276" placement="0:1:-1:-1:-4:-30:110:145:955:510" />
+	<localfile path="D:\projects\haskell\newlog2.txt" linenum="14661" placement="0:1:-1:-1:-4:-30:132:174:977:539" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze.hs" linenum="17" placement="0:1:-1:-1:-4:-30:22:29:867:394" />
+	<localfile path="D:\projects\haskell\gruzeStore\Data\Store\Gruze\Connection\MySQL.hs" linenum="20" placement="2:3:-1:-1:-4:-30:44:58:889:423" />
+	<localfile path="D:\projects\haskell\gruzeTest\gruzeTest.cabal" linenum="1" placement="0:1:-1:-1:-4:-30:66:87:911:452" />
+	<localfile path="D:\projects\haskell\gruzeStore\schema\mysql.sql" linenum="1" placement="0:1:-1:-1:-4:-30:88:116:933:481" />
+</workspace>
+

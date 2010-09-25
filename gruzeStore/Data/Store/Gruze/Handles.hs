@@ -75,7 +75,7 @@ maybeGetStringHandles grzH ss = do
 makeStringHandle :: GrzHandle -> String -> Int -> IO Int
 makeStringHandle grzH s hash_s =
     do
-        val <- grzQuery grzH query [toSql s, toSql hash_s]
+        grzRunSql grzH query [toSql s, toSql hash_s]
         getLastInsertId grzH
     where
         query = "INSERT INTO names(string,hash) values(?,?)"
@@ -86,7 +86,7 @@ makeStringHandle grzH s hash_s =
 
 getFileHandle :: GrzHandle -> String -> String -> String -> String -> Int -> IO Int
 getFileHandle grzH ofn ct locd locf time = do
-        val <- grzQuery grzH query [toSql ofn, toSql ct, toSql locd, toSql locf, toSql time]
+        grzRunSql grzH query [toSql ofn, toSql ct, toSql locd, toSql locf, toSql time]
         getLastInsertId grzH
     where
         query = "INSERT INTO files(originalName,contentType,locationDir,locationFile,timeCreated) values(?,?,?,?,?)"
@@ -128,8 +128,8 @@ delFile grzH a@(GrzAtomFile i) = do
         case fd of
             Just ([_,_,locd,_],_) -> do 
                                         removeDirectoryRecursive (dataDir ++ "/" ++ locd)
-                                        grzQuery grzH queryMetadata [toSql i]
-                                        grzQuery grzH queryFiles [toSql i]
+                                        grzRunSql grzH queryMetadata [toSql i]
+                                        grzRunSql grzH queryFiles [toSql i]
                                         grzCommit grzH
                                         return True
             otherwise -> return False  

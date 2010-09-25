@@ -15,8 +15,9 @@ homepage:           http://gruze.org
 hs-source-dirs:     .
 build-depends:      base >= 4 && < 5, containers, split, HDBC,
 
-                    -- uncomment one of these three
-                    HDBC-sqlite3,
+                    -- uncomment one of these four
+                    -- HDBC-sqlite3,
+                    HDBC-mysql,
                     -- HDBC-odbc,
                     -- HDBC-postgresql, 
                     
@@ -34,7 +35,8 @@ other-modules:      Data.Store.Gruze.Types,
                     Data.Store.Gruze.Query,
                     
                     -- uncomment one of these three Connection options
-                    Data.Store.Gruze.Connection.Sqlite3,
+                    -- Data.Store.Gruze.Connection.Sqlite3,
+                    Data.Store.Gruze.Connection.MySQL,
                     -- Data.Store.Gruze.Connection.ODBC,
                     -- Data.Store.Gruze.Connection.PostgreSQL,                    
                     

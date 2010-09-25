@@ -93,16 +93,16 @@ grzAddMetadata grzH guid h (s,atoms) = grzInsertMetadata grzH guid h atoms
 grzInsertMetadata :: GrzHandle -> Int -> Int -> [GrzAtom] -> IO Integer
 grzInsertMetadata grzH guid h (a:as) =
     do
-        grzQuery grzH query $ (map toSql [atomToStorageInt a,guid,h,safeAtomToInt a]) ++ [toSql $ safeAtomToString a]
+        grzRunSql grzH query $ (map toSql [atomToStorageInt a,guid,h,safeAtomToInt a]) ++ [toSql $ safeAtomToString a]
         grzInsertMetadata grzH guid h as
     where
         query = "INSERT INTO metadata (metadataType,objectGuid,nameId,integerValue,stringValue) values(?,?,?,?,?)" 
 grzInsertMetadata _ _ _ [] = return 0
 
-grzDeleteMetadata :: GrzHandle -> Int -> Int -> IO [[SqlValue]]
+grzDeleteMetadata :: GrzHandle -> Int -> Int -> IO ()
 grzDeleteMetadata grzH guid h =
     do
-        grzQuery grzH query $ (map toSql [guid,h])
+        grzRunSql grzH query $ (map toSql [guid,h])
     where
         query = "DELETE FROM metadata WHERE objectGuid = ? AND nameId = ?"
 
@@ -138,7 +138,7 @@ createObj grzH w p =
         ptime <- getPOSIXTime
         let time = floor ptime
         h <- getStringHandle grzH t
-        val <- grzQuery grzH query $ map toSql [h,ownerID,containerID,siteID,time,time,enabled]
+        grzRunSql grzH query $ map toSql [h,ownerID,containerID,siteID,time,time,enabled]
         guid <- getLastInsertId grzH
         let theObj = obj {
             objID = guid,
@@ -233,7 +233,7 @@ saveObj grzH o =
     do 
         ptime <- getPOSIXTime
         let time = floor ptime
-        val <- grzQuery grzH query $ map toSql [ownerID,containerID,siteID,time,guid]
+        grzRunSql grzH query $ map toSql [ownerID,containerID,siteID,time,guid]
         let theObj = obj {objTimeUpdated = time}
         -- TODO: perhaps f could return an error condition triggering a rollback?
         f <- grzSetMetadataArray grzH guid (Map.toList $ getMetadata theObj)
@@ -271,10 +271,10 @@ delObjByID grzH 0 = return True
 delObjByID grzH guid =
     do
         -- delete the metadata 
-        grzQuery grzH metadata_query $ [toSql guid]
+        grzRunSql grzH metadata_query $ [toSql guid]
         
         -- delete the relationships
-        grzQuery grzH relationship_query $ [toSql guid,toSql guid]
+        grzRunSql grzH relationship_query $ [toSql guid,toSql guid]
         
         -- delete the owned objects
         owned <- getObjIDs grzH (hasOwners [GrzObjID guid]) [] 0 0
@@ -289,7 +289,7 @@ delObjByID grzH guid =
         mapM_ (delObjByID grzH) sited
         
         -- delete the object from the object table
-        grzQuery grzH object_query $ [toSql guid]
+        grzRunSql grzH object_query $ [toSql guid]
         
         return True
     where
@@ -409,7 +409,7 @@ addRel grzH rel obj1 obj2 =
                 ptime <- getPOSIXTime
                 let time = floor ptime
                 h <- getStringHandle grzH rel
-                grzQuery grzH query $ map toSql [getID obj1,getID obj2,h,time]
+                grzRunSql grzH query $ map toSql [getID obj1,getID obj2,h,time]
                 grzCommit grzH
              
     where
@@ -451,8 +451,8 @@ setSearchable :: GrzObjClass o =>
 setSearchable grzH w ns = do
     oti <- getStringHandle grzH ot
     nsi <- mapM (getStringHandle grzH) ns
-    grzQuery grzH deleteQuery [toSql oti]
-    mapM_ (grzQuery grzH insertQuery) (map (\x -> [toSql oti, toSql x]) nsi)
+    grzRunSql grzH deleteQuery [toSql oti]
+    mapM_ (grzRunSql grzH insertQuery) (map (\x -> [toSql oti, toSql x]) nsi)
     
     where
         ot = objWrapperToString (w emptyObj)

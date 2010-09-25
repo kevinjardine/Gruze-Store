@@ -52,20 +52,49 @@ main = do
       file system configuration.
     -} 
     
-    let configSqlite3 =
-            -- the location of the Sqlite3 file for the Gruze database 
-            (setString "grzDBFile" "d:/testdb")
-        
+--     let configSqlite3 =
+--             -- the location of the Sqlite3 file for the Gruze database 
+--             (setString "grzDBFile" "d:/testdb")
+--         
+--             -- location of data directory on file system (must be writable by Haskell)
+--             . (setString "grzDataDirectory" "D:/projects/haskell/storedata")
+--             
+--             -- location of log file on file system (must be writable by Haskell)
+--             -- at debug level (used in the example code below), Gruze logs a lot of 
+--             -- information (generated queries, object creation notices etc.)
+--             . (setString "grzLogFile" "D:/projects/haskell/newlog2.txt")
+--             
+--             -- location of Imagemagick convert executable on file system
+--             . (setString "grzConvertLocation" "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
+            
+    let configMySQL =
+            
+            -- db server location (usually localhost)
+            (setString "grzDBServer" "localhost")
+            
+            -- database name
+            . (setString "grzDBDatabase" "gruze")
+            
+            -- database user name
+            . (setString "grzDBUID" "root")
+            
+            -- database password
+            . (setString "grzDBPassword" "jupiter012")
+            
             -- location of data directory on file system (must be writable by Haskell)
-            . (setString "grzDataDirectory" "D:/projects/haskell/storedata")
+            . (setString "grzDataDirectory" "/root/gruzedata")
             
             -- location of log file on file system (must be writable by Haskell)
             -- at debug level (used in the example code below), Gruze logs a lot of 
             -- information (generated queries, object creation notices etc.)
-            . (setString "grzLogFile" "D:/projects/haskell/newlog2.txt")
+            . (setString "grzLogFile" "/root/gruzelog.txt")
             
             -- location of Imagemagick convert executable on file system
-            . (setString "grzConvertLocation" "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
+            . (setString "grzConvertLocation" "/usr/bin/convert")
+            
+            -- socket used by MySQL on Unix-like systems
+            . (setString "grzDBSocket" "/var/lib/mysql/mysql.sock")
+
      
 --     let configODBC =
 --             -- the ODBC driver string 
@@ -126,7 +155,7 @@ main = do
     -- In this simple example, the handle is passed directly to all the model
     -- functions. In a more complex example, the handle could be hidden in a
     -- Reader monad or some other state monad to reduce parameter clutter          
-    grzH' <- getHandle configSqlite3 GrzSqlite3DB
+    grzH' <- getHandle configMySQL GrzMySQLDB
        
     -- delete any previous test site (and all its content)
     let testSitesQd = hasIn "subtype" ["grzTest"]

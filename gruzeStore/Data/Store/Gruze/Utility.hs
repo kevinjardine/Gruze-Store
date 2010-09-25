@@ -5,9 +5,10 @@ where
 import Data.Store.Gruze.Box
 import Data.Store.Gruze.Types
 
--- uncomment one of the three Connection options below:
+-- uncomment one of the four Connection options below:
 
-import Data.Store.Gruze.Connection.Sqlite3
+-- import Data.Store.Gruze.Connection.Sqlite3
+import Data.Store.Gruze.Connection.MySQL
 -- import Data.Store.Gruze.Connection.ODBC
 -- import Data.Store.Gruze.Connection.PostgreSQL
 
@@ -78,6 +79,13 @@ grzQuery grzH query values =
     do
         grzLog grzH DebugLogLevel $ "query: " ++ query ++ " values: " ++ (show values)
         handleSqlError $ quickQuery' (grzDatabaseHandle grzH) query values
+        
+grzRunSql :: GrzHandle -> String -> [SqlValue] -> IO ()  
+grzRunSql grzH query values =
+    do
+        grzLog grzH DebugLogLevel $ "run sql: " ++ query ++ " values: " ++ (show values)
+        handleSqlError $ run (grzDatabaseHandle grzH) query values
+        return ()
         
 grzCommit :: GrzHandle -> IO ()
 grzCommit grzH = commit (grzDatabaseHandle grzH)

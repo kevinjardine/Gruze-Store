@@ -10,7 +10,7 @@ CREATE TABLE files (
   locationDir text collate utf8_unicode_ci NOT NULL,
   timeCreated int(11) NOT NULL default '0',
   PRIMARY KEY  (id)
-) DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci ;
 
 -- --------------------------------------------------------
 
@@ -27,7 +27,7 @@ CREATE TABLE metadata (
   stringValue text collate utf8_unicode_ci NOT NULL,
   PRIMARY KEY  (id),
   KEY object_guid (objectGuid,nameId)
-) DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci ;
 
 -- --------------------------------------------------------
 
@@ -41,7 +41,7 @@ CREATE TABLE `names` (
   `string` text collate utf8_unicode_ci NOT NULL,
   PRIMARY KEY  (id),
   KEY `hash` (`hash`)
-) DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci ;
 
 -- --------------------------------------------------------
 
@@ -60,7 +60,7 @@ CREATE TABLE objects (
   enabled tinyint(1) NOT NULL,
   PRIMARY KEY  (guid),
   KEY object_type (objectType,ownerGuid,containerGuid,siteGuid)
-) DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci ;
 
 -- --------------------------------------------------------
 
@@ -76,7 +76,7 @@ CREATE TABLE relationships (
   timeCreated int(11) NOT NULL,
   PRIMARY KEY  (id),
   KEY guid1 (guid1,guid2,relationshipType)
-) DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci ;
 
 -- --------------------------------------------------------
 
@@ -88,4 +88,4 @@ CREATE TABLE searchable (
   typeID int(11) NOT NULL,
   nameID int(11) NOT NULL,
   UNIQUE KEY objectID (typeID,nameID)
-) DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
