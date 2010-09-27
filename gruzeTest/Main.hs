@@ -80,7 +80,7 @@ main = do
             . (setString "grzDBUID" "root")
             
             -- database password
-            . (setString "grzDBPassword" "jupiter012")
+            . (setString "grzDBPassword" "")
             
             -- location of data directory on file system (must be writable by Haskell)
             . (setString "grzDataDirectory" "/root/gruzedata")
@@ -138,7 +138,7 @@ main = do
 --             . (setString "grzDBUID" "gruze")
 --             
 --             -- database password
---             . (setString "grzDBPassword" "jupiter")
+--             . (setString "grzDBPassword" "")
 --             
 --             -- location of data directory on file system (must be writable by Haskell)
 --             . (setString "grzDataDirectory" "D:/projects/haskell/storedata")
