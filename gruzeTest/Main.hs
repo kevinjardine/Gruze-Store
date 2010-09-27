@@ -3,8 +3,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
 
-import Data.Store.Gruze
-import Data.Store.Gruze.Templates
+import Database.Gruze
+import Database.Gruze.Templates
+import Database.Gruze.Connection.MySQL
 
 import qualified Data.ByteString as BS
 
@@ -155,7 +156,7 @@ main = do
     -- In this simple example, the handle is passed directly to all the model
     -- functions. In a more complex example, the handle could be hidden in a
     -- Reader monad or some other state monad to reduce parameter clutter          
-    grzH' <- getHandle configMySQL GrzMySQLDB
+    grzH' <- getHandle configMySQL
        
     -- delete any previous test site (and all its content)
     let testSitesQd = hasIn "subtype" ["grzTest"]
@@ -378,7 +379,7 @@ main = do
     
     rabosc <- getObjAggByObjSumCount grzH "value" Rating BlogPost
                 ((hasRel "-hasContainer"))
-                [SumAsc,GuidDesc] 0 0
+                [SumAsc,StringAsc "tags"] 0 0
             
     putStrLn $ concatMap (\(o,(s,c)) -> 
                 ("(" ++ (ppObj o) ++ "," ++ (show s) ++ "," ++ (show c) ++ ")\n")

@@ -1,0 +1,19 @@
+name:               gruze-mysql
+version:            0.1
+synopsis:           MySQL driver for Gruze object store
+description:        Based on HDBC
+category:           Data
+license:            GPL
+license-file:       LICENSE
+author:             Kevin Jardine
+maintainer:         kevin@gruze.org
+Tested-With:        GHC == 6.12.1
+stability:          unstable
+cabal-version:      >= 1.6
+build-type:         Simple
+homepage:           http://gruze.org
+hs-source-dirs:     .
+build-depends:      base >= 4 && < 5, gruze, HDBC, HDBC-mysql
+                    
+exposed-modules:    Database.Gruze.Connection.MySQL
+                    
