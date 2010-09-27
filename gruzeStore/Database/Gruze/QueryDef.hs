@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module Data.Store.Gruze.QueryDef (
+module Database.Gruze.QueryDef (
 
 -- classes
 GrzQueryTypeClass(hasIn,hasBetween,hasOp),
@@ -38,8 +38,8 @@ setQueryType, setOrderBy, setAggOrderBy
 
 ) where
 
-import Data.Store.Gruze.Types
-import Data.Store.Gruze.Box
+import Database.Gruze.Types
+import Database.Gruze.Box
 
 import Data.List (intercalate, foldl')
 import Data.Maybe
@@ -71,13 +71,14 @@ setOrderByItem ob isAgg =
         otherwise -> setOrderByOrdinaryItem ob
         
 setOrderByOrdinaryItem ob ((m,n),x) =
-    ((m,n),(GrzQDOrderBy m (getOrderBit ob n)) :x)       
+    ((m,n),(GrzQDOrderBy (-1) (getOrderBit ob n)) :x)       
 
 setOrderByMetadataItem :: GrzOrderBy -> String -> Bool -> GrzQueryDef -> GrzQueryDef
 setOrderByMetadataItem ob s isAgg ((m,n),x) =
     ((m,n+1),(GrzQDOrderBy realM (getOrderBit ob n))
+    : (GrzQDSelect (getSelectBit ob n))
     : (GrzQDGroupBy realM ("mob" ++ (show n) ++ ".objectGuid"))
-    : (GrzQDJoin realM ("metadata mob" ++ (show n) ++ " ON (mob" ++ (show n) ++ ".objectGuid = " ++ obj ++ ")")) 
+    : (GrzQDJoin realM ("metadata mob" ++ (show n) ++ " ON (mob" ++ (show n) ++ ".objectGuid = obj" ++ (show realM) ++ ".guid)")) 
     : (GrzQDWhereFrags realM
             (
                 [GrzQDString 
@@ -88,9 +89,16 @@ setOrderByMetadataItem ob s isAgg ((m,n),x) =
             )
         )
       : x)
-    where
-        realM = (if isAgg then m-1 else m)
-        obj = "obj" ++ (show realM) ++ ".guid"
+    where    
+        realM = if isAgg then m-1 else m
+        
+getSelectBit :: GrzOrderBy -> Int -> String
+getSelectBit ob n =
+    case ob of
+        StringAsc _ -> "max(mob" ++ (show n) ++ ".stringValue) AS mob" ++ (show n) ++ "_stringValue"
+        StringDesc _ -> "max(mob" ++ (show n) ++ ".stringValue) AS mob" ++ (show n) ++ "_stringValue"
+        IntAsc _ -> "max(mob" ++ (show n) ++ ".integerValue) AS mob" ++ (show n) ++ "_integerValue"
+        IntDesc _ -> "max(mob" ++ (show n) ++ ".integerValue) AS mob" ++ (show n) ++ "_integerValue"
 
 getOrderBit :: GrzOrderBy -> Int -> String
 getOrderBit ob n =
@@ -98,13 +106,13 @@ getOrderBit ob n =
         GuidAsc -> "objGuid ASC"
         GuidDesc -> "objGuid DESC"
         TimeCreatedAsc -> "timeCreated ASC"
-        TimeCreatedDesc -> "timeCreated Desc"
+        TimeCreatedDesc -> "timeCreated DESC"
         TimeUpdatedAsc -> "timeUpdated ASC"
         TimeUpdatedDesc -> "timeUpdated DESC"
-        StringAsc _ -> "max(mob" ++ (show n) ++ ".stringValue) ASC"
-        StringDesc _ -> "max(mob" ++ (show n) ++ ".stringValue) DESC"
-        IntAsc _ -> "max(mob" ++ (show n) ++ ".integerValue) ASC"
-        IntDesc _ -> "max(mob" ++ (show n) ++ ".integerValue) DESC"
+        StringAsc _ -> "q1.mob" ++ (show n) ++ "_stringValue ASC"
+        StringDesc _ -> "q1.mob" ++ (show n) ++ "_stringValue DESC"
+        IntAsc _ -> "q1.mob" ++ (show n) ++ "_integerValue ASC"
+        IntDesc _ -> "q1.mob" ++ (show n) ++ "_integerValue DESC"
         CountAsc -> "grzCount ASC"
         CountDesc -> "grzCount DESC"
         SumAsc -> "grzSum ASC"

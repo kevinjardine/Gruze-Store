@@ -1,13 +1,13 @@
-module Data.Store.Gruze.Query
+module Database.Gruze.Query
 
 where
 
 -- internal functions to convert and run query definitions
 
-import Data.Store.Gruze.Types
-import Data.Store.Gruze.Box
-import Data.Store.Gruze.Handles
-import Data.Store.Gruze.Utility
+import Database.Gruze.Types
+import Database.Gruze.Box
+import Database.Gruze.Handles
+import Database.Gruze.Utility
 
 import Database.HDBC
 import Data.List (intercalate, foldl')
@@ -115,7 +115,7 @@ orderByToString _ = []
 getOrderBy :: [GrzQueryDefItem] -> String
 getOrderBy q =
     " ORDER BY " ++ if null ob then "objGuid " else ob ++ " "
-    where ob = intercalate ", " $ concatMap orderByToString q
+    where ob = intercalate ", " $ reverse $ concatMap orderByToString q
     
 groupByToString :: GrzQueryDefItem -> [String]
 groupByToString (GrzQDGroupBy _ s) = [s]
@@ -123,7 +123,7 @@ groupByToString _ = []
 
 getGroupBy :: [GrzQueryDefItem] -> String
 getGroupBy q =
-    " GROUP BY objGuid, n.string" ++ if null gb then " " else ", " ++ gb ++ " "
+    " GROUP BY objGuid" ++ if null gb then " " else ", " ++ gb ++ " "
     where
         gb = intercalate ", " $ concatMap groupByToString q 
 
@@ -134,13 +134,20 @@ needToString _ = []
 getQueryNeeds :: [GrzQueryDefItem] -> [String]
 getQueryNeeds q = concatMap needToString q
 
-joinToString :: Int -> Maybe Int -> GrzQueryDefItem -> [String]
-joinToString m (Just _) (GrzQDJoin n x) = if n == m then ["LEFT JOIN " ++ x] else ["INNER JOIN " ++ x]
-joinToString m Nothing (GrzQDJoin n x) = ["INNER JOIN " ++ x]
-joinToString _ _ _ = []
+joinToString :: Int -> Maybe Int -> GrzQueryLocation -> GrzQueryDefItem -> [String]
+joinToString _ _ Exterior (GrzQDJoin (-1) x) = [" INNER JOIN " ++ x ++ " "]
+joinToString _ _ Exterior (GrzQDJoin _ _) = []
+joinToString _ _ Interior (GrzQDJoin (-1) x) = []
+joinToString m (Just _) _ (GrzQDJoin n x) = 
+    if n == m 
+        then 
+            [" LEFT JOIN " ++ x ++ " "] 
+        else [" INNER JOIN " ++ x ++ " "]
+joinToString m Nothing _ (GrzQDJoin n x) = [" INNER JOIN " ++ x ++ " "]
+joinToString _ _ _ _ = []
 
-getQueryJoins :: [GrzQueryDefItem] -> Int -> Maybe Int -> [String]
-getQueryJoins q m maybeAggByObjQueryTypeID = concatMap (joinToString m maybeAggByObjQueryTypeID) q
+getQueryJoins :: [GrzQueryDefItem] -> Int -> Maybe Int -> GrzQueryLocation -> [String]
+getQueryJoins q m maybeAggByObjQueryTypeID ql = concatMap (joinToString m maybeAggByObjQueryTypeID ql) q
 
 whereToString :: Int -> Maybe Int -> GrzQueryDefItem -> [String]
 whereToString m (Just _) (GrzQDWhere n s) = 
@@ -160,6 +167,13 @@ getQueryType q = case concatMap isQueryType q of
 isQueryType :: GrzQueryDefItem -> [GrzQueryType]
 isQueryType (GrzQDType t) = [t]
 isQueryType _ = []
+
+getSelects :: [GrzQueryDefItem] -> [String]
+getSelects q = concatMap isSelect q
+
+isSelect :: GrzQueryDefItem -> [String]
+isSelect (GrzQDSelect s) = [s]
+isSelect _ = []
 
 getQueryAgg :: [GrzQueryDefItem] -> String
 getQueryAgg q = case concatMap isQueryAgg q of
@@ -188,7 +202,8 @@ grzCreateQuery grzH q = grzGetQuery grzH (q ((0,0), []))
 grzGetQuery :: GrzHandle -> GrzQueryDef -> IO (Maybe GrzQuery)
 grzGetQuery grzH ((m,n), q) =
     do
-        maybeFrags <- grzQueryWhereFragments grzH q m maybeAggByObjQueryTypeID
+        maybeFrags <- grzQueryWhereFragments grzH q m maybeAggByObjQueryTypeID Interior
+        maybeFrags2 <- grzQueryWhereFragments grzH q m maybeAggByObjQueryTypeID Exterior
         if isNothing maybeFrags
             then
                 return Nothing
@@ -196,20 +211,22 @@ grzGetQuery grzH ((m,n), q) =
                 let justFrags = fromJust maybeFrags
                 let qv = map snd justFrags
                 let d = concatMap (snd . fst) justFrags
-                let frags = map (fst . fst) justFrags
+                let frags = filter (not . null) (map (fst . fst) justFrags)
+                let nullWhereBit = null $ concat whereBit
+                let nullFrags = null $ concat frags
                 return $ Just (
                     (((prefix
                     ++ " "
-                    ++ (intercalate " " (reverse $ getQueryJoins q m maybeAggByObjQueryTypeID))
+                    ++ (intercalate " " (reverse $ getQueryJoins q m maybeAggByObjQueryTypeID Interior ))
                     ++ aggNameJoin
-                    ++ typeStringJoin
-                    ++ (if (null whereBit) && (null frags)
+                    ++ (if nullWhereBit && nullFrags
                             then ""
                             else (" WHERE " 
-                                ++ (intercalate " AND " whereBit)
-                                ++ (if (null frags) || (null whereBit) then "" else " AND ")
-                                ++ (intercalate " AND " frags))
-                        )
+                                ++ (if nullWhereBit then "" else (intercalate " AND " whereBit))
+                                ++ (if nullFrags || nullWhereBit then "" else " AND ")
+                                ++ (if nullFrags then "" else intercalate " AND " frags)
+                            )
+                       )
                     ++ aggTypeWhere
                     ++ aggNameWhere
                     ++ " " 
@@ -217,9 +234,28 @@ grzGetQuery grzH ((m,n), q) =
                             then
                                 ""
                             else
-                                (getGroupBy q) ++ (getOrderBy q)
+                                getGroupBy q 
                     )
                     ++ suffix
+                    ++ (intercalate " " (reverse $ getQueryJoins q m maybeAggByObjQueryTypeID Exterior ))
+                    ++ typeStringJoin
+                    ++ (if isNothing maybeFrags2 
+                            then 
+                                "" 
+                            else
+                                (let s = (intercalate " AND " (
+                                        filter (not . null) (map (fst . fst) (fromJust maybeFrags2))))
+                                    in
+                                        if null s then "" else " WHERE " ++ s
+                                )
+                       )
+                    ++ (if queryType `elem` [GrzQTCount, GrzQTAggSumCount] 
+                            then 
+                                "" 
+                            else 
+                                --  (" GROUP BY objGuid " ++ (getOrderBy q) )
+                                ((getOrderBy q) )
+                       )
                     ), queryType), d),
                    (needs, (concatMap fst qv, concatMap snd qv)) )
     where
@@ -237,11 +273,13 @@ grzGetQuery grzH ((m,n), q) =
         agg = "obj" ++ (show $ if isJust maybeAggByObjQueryTypeID 
                                 then m-1 
                                 else m)
-        typeStringJoin = if queryType `elem` [GrzQTCount,GrzQTAggSumCount]
+        typeStringJoin = if queryType `elem` [GrzQTCount,GrzQTAggSumCount,GrzQTID]
                             then
                                 ""
                             else
-                                " INNER JOIN names n ON (n.id = " ++ agg ++ ".objectType) " 
+                                (" INNER JOIN objects obje ON (obje.guid = q1.objGuid) " 
+                                    ++ " INNER JOIN names n ON (n.id = obje.objectType) "
+                                )
         -- possibly add type and metadata constraints for the objects being aggregated
         aggTypeWhere = case maybeAggByObjQueryTypeID of
                         Just i -> " AND obj" ++ (show (m-1)) 
@@ -262,41 +300,42 @@ grzGetQuery grzH ((m,n), q) =
                     GrzQTAggSumCount            -> "agg_sumcount"
                     GrzQTAggByObjCount _        -> "aggbyobj_count"
                     GrzQTAggByObjSumCount _ _   -> "aggbyobj_sumcount"
-        sqlFrags = fromJust $ lookup sqlIndex sqlDict    
+        sqlFrags = fromJust $ lookup sqlIndex sqlDict
+        selectBit = getSelects q    
         prefix = (fst sqlFrags) 
                     ++ if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
                         then "" 
                         else if isJust maybeAggByObjQueryNameID 
                                 then
-                                    "SELECT " ++ agg ++ ".guid AS objGuid, n.string as typeString, count(DISTINCT ma.id) AS grzCount, "
-                                        ++ "sum(DISTINCT ma.integerValue) AS grzSum FROM objects obj0 "
+                                    "SELECT " ++ agg ++ ".guid AS objGuid, count(DISTINCT ma.id) AS grzCount, "
+                                        ++ "sum(DISTINCT ma.integerValue) AS grzSum"
+                                        ++ (if null selectBit then "" else ", " ++ (intercalate ", " selectBit))
+                                        ++ " FROM objects obj0 "
                                 else if queryType == GrzQTCount
                                         then
                                             "SELECT " ++ agg ++ ".guid AS objGuid FROM objects obj0 "
                                         else
-                                            "SELECT " ++ agg ++ ".guid AS objGuid, n.string as typeString, count(DISTINCT obj" ++ (show m) 
-                                                ++ ".guid) AS grzCount FROM objects obj0 "
---         suffix = (if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
---                         then ""
---                         else " GROUP BY " ++ agg ++ " ")
---                     ++ (snd sqlFrags)
+                                            "SELECT " ++ agg ++ ".guid AS objGuid, count(DISTINCT obj" ++ (show m) 
+                                                ++ ".guid) AS grzCount"
+                                                ++ (if null selectBit then "" else ", " ++ (intercalate ", " selectBit))
+                                                ++ " FROM objects obj0 "
 
         suffix = snd sqlFrags
                     
 sqlDict = [
     ("full",(
-        "SELECT q1.objGuid, q1.typeString, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled FROM (",
-        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid)"
+        "SELECT q1.objGuid, n.string, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled FROM (",
+        ") as q1"
         )
     ),
     ("guid", (
-        "",
-        ""
+        "SELECT q1.objGuid as objGuid FROM (",
+        ") as q1 "
         )
     ),
     ("count", (
         "SELECT count(DISTINCT q1.objGuid) as total FROM (",
-        ") as q1"
+        ") as q1 GROUP BY objGuid"
         )
     ),
     ("agg_count", (
@@ -310,13 +349,16 @@ sqlDict = [
         )
      ),
      ("aggbyobj_count", (
-        "SELECT q1.objGuid, q1.typeString, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled, q1.grzCount FROM (",
-        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid)"
+        "SELECT q1.objGuid, n.string, timeCreated, timeUpdated, ownerGuid, "
+            ++ "containerGuid, siteGuid, enabled, q1.grzCount FROM (",
+        ") as q1"
         )
      ),
      ("aggbyobj_sumcount", (
-        "SELECT q1.objGuid, q1.typeString, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled, q1.grzCount, q1.grzSum FROM (",
-        ") as q1 INNER JOIN objects obje ON (obje.guid = q1.objGuid)"
+        "SELECT q1.objGuid, n.string, timeCreated, timeUpdated, ownerGuid, "
+            ++ "containerGuid, siteGuid, enabled, q1.grzCount, "
+            ++ "CASE WHEN q1.grzSum IS NULL THEN 0 ELSE q1.grzSum END AS grzSum FROM (",
+        ") as q1"
         )
      )
   ]   
@@ -325,9 +367,10 @@ grzQueryWhereFragments :: GrzHandle
     -> [GrzQueryDefItem]
     -> Int
     -> Maybe Int
+    -> GrzQueryLocation
     -> IO (Maybe [((String,[(String,Int)]), GrzQueryValues)])
-grzQueryWhereFragments grzH q m maybeAggByObjQueryTypeID = do
-    r <- mapM (grzHandleWhereQueryFragment grzH m maybeAggByObjQueryTypeID) frags
+grzQueryWhereFragments grzH q m maybeAggByObjQueryTypeID ql = do
+    r <- mapM (grzHandleWhereQueryFragment grzH m maybeAggByObjQueryTypeID ql) frags
     if and $ map isJust r
         then
             return $ Just (map fromJust r)
@@ -342,9 +385,21 @@ grzQueryWhereFragments grzH q m maybeAggByObjQueryTypeID = do
 grzHandleWhereQueryFragment :: GrzHandle
     -> Int
     -> Maybe Int
-    -> GrzQueryDefItem 
+    -> GrzQueryLocation 
+    -> GrzQueryDefItem
     -> IO (Maybe ((String,[(String,Int)]), GrzQueryValues))
-grzHandleWhereQueryFragment grzH m maybeAggByObjQueryTypeID (GrzQDWhereFrags n items) = do
+grzHandleWhereQueryFragment grzH m maybeAggByObjQueryTypeID Exterior (GrzQDWhereFrags (-1) items) =
+    grzProcessWhereQueryFragment grzH m maybeAggByObjQueryTypeID (-1) items
+grzHandleWhereQueryFragment _ _ _ Exterior (GrzQDWhereFrags _ _) =
+    return $ Just (("",[]),([],[]))
+grzHandleWhereQueryFragment _ _ _ Interior (GrzQDWhereFrags (-1) _) =
+    return $ Just (("",[]),([],[]))
+grzHandleWhereQueryFragment grzH m maybeAggByObjQueryTypeID ql (GrzQDWhereFrags n items) =
+    grzProcessWhereQueryFragment grzH m maybeAggByObjQueryTypeID n items    
+grzHandleWhereQueryFragment _ _ _ _ _ =
+    return $ Just (("",[]),([],[])) 
+
+grzProcessWhereQueryFragment grzH m maybeAggByObjQueryTypeID n items = do
     r <- mapM (qwfItemToMaybeString grzH) items
     if and $ map isJust r
         then do

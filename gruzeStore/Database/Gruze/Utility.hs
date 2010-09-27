@@ -1,17 +1,9 @@
-module Data.Store.Gruze.Utility
+module Database.Gruze.Utility
 
 where
 
-import Data.Store.Gruze.Box
-import Data.Store.Gruze.Types
-
--- uncomment one of the four Connection options below:
-
--- import Data.Store.Gruze.Connection.Sqlite3
-import Data.Store.Gruze.Connection.MySQL
--- import Data.Store.Gruze.Connection.ODBC
--- import Data.Store.Gruze.Connection.PostgreSQL
-
+import Database.Gruze.Box
+import Database.Gruze.Types
 
 import Database.HDBC
 import Data.Time.Clock.POSIX
@@ -20,37 +12,13 @@ import Data.Time.Format
 import System.Locale (defaultTimeLocale)
 import Data.Maybe
 
-data GrzHandle = GrzHandle {
-    grzDatabaseHandle :: Connection,
-    grzDataDirectory :: FilePath,
-    grzConvertLocation :: FilePath,
-    grzLogFile :: FilePath,
-    grzDefaultSite :: GrzObj,
-    grzThumbDefs :: [(String,String)],
-    grzLogLevel :: GrzLogLevel,
-    grzDatabaseType :: GrzDatabaseType
-}
+-- the slightly strange record handling here is due to the fact that the first
+-- value of the GrzHandle record is a polymorphic type and apparently standard
+-- record accessor functions cannot be used to store it. Moreover only
+-- pattern matching can be used to extract the value. Hence the several
+-- grzH@( GrzHandle {grzDatabaseHandle = dbc} ) references below.
    
--- gets the handle
-getHandle :: (GrzAtomBox -> GrzAtomBox) -> GrzDatabaseType -> IO GrzHandle   
-getHandle c dbt = do
-    let config = c emptyAtomBox
-    dbc <- getDatabaseConnection config
-    return $ GrzHandle {
-            grzDatabaseHandle = dbc,
-            grzDataDirectory = getString "grzDataDirectory" "" config,
-            grzConvertLocation = getString "grzConvertLocation" "" config,
-            grzLogFile = getString "grzLogFile" "" config,
-            grzDefaultSite = emptyBareObj,
-            grzThumbDefs = [],
-            grzLogLevel = WarningLogLevel,
-            grzDatabaseType = dbt
-        }
-    
 getLastInsertId grzH = do
-    
-    -- qs <- grzQuery grzH "SELECT LAST_INSERT_ID() AS id" []
-    -- sqlite3 version
     qs <- grzQuery grzH ("SELECT " ++ fc ++ " AS id") []
     return ((fromSql (head (head qs)))::Int)
     where
@@ -75,23 +43,23 @@ transformStringClause grzH sc =
         otherwise -> sc
 
 grzQuery :: GrzHandle -> String -> [SqlValue] -> IO [[SqlValue]]  
-grzQuery grzH query values =
+grzQuery grzH@( GrzHandle {grzDatabaseHandle = dbc} ) query values =
     do
         grzLog grzH DebugLogLevel $ "query: " ++ query ++ " values: " ++ (show values)
-        handleSqlError $ quickQuery' (grzDatabaseHandle grzH) query values
+        handleSqlError $ quickQuery' dbc query values
         
 grzRunSql :: GrzHandle -> String -> [SqlValue] -> IO ()  
-grzRunSql grzH query values =
+grzRunSql grzH@( GrzHandle {grzDatabaseHandle = dbc} ) query values =
     do
         grzLog grzH DebugLogLevel $ "run sql: " ++ query ++ " values: " ++ (show values)
-        handleSqlError $ run (grzDatabaseHandle grzH) query values
+        handleSqlError $ run dbc query values
         return ()
         
 grzCommit :: GrzHandle -> IO ()
-grzCommit grzH = commit (grzDatabaseHandle grzH)
+grzCommit grzH@( GrzHandle {grzDatabaseHandle = dbc} ) = commit dbc
 
 grzRollback :: GrzHandle -> IO ()
-grzRollback grzH = rollback (grzDatabaseHandle grzH)
+grzRollback grzH@( GrzHandle {grzDatabaseHandle = dbc} ) = rollback dbc
   
 logLevelToString = [    (DebugLogLevel,"DEBUG"),
                         (NotificationLogLevel,"NOTIFICATION"),

@@ -1,10 +1,10 @@
-module Data.Store.Gruze.Handles
+module Database.Gruze.Handles
 
 where
 
-import Data.Store.Gruze.Utility
-import Data.Store.Gruze.Box
-import Data.Store.Gruze.Types
+import Database.Gruze.Utility
+import Database.Gruze.Box
+import Database.Gruze.Types
 
 import Database.HDBC
 import Data.List (intercalate)
@@ -147,8 +147,8 @@ getFileMetadataResult [[ofn, ct, locd, locf, time]] = Just $ (map fromSql [ofn, 
 -- TODO: fix this function to make sure it cannot generate
 -- a name that already exists
 generateFileLocationDirectory dataDir d = do
-    rn <- getStdRandom (randomR (0::Int,5000))
-    let loc = "uploads/" ++ d ++ "/" ++ (show rn)
+    rn <- getStdRandom (randomR (0::Int,1000))
+    let loc = "uploads/" ++ (show rn) ++ "/" ++ d
     let dir = dataDir ++ "/" ++ loc
     createDirectoryIfMissing True dir
     return loc

@@ -1,4 +1,4 @@
-module Data.Store.Gruze (
+module Database.Gruze (
 
     -- defines the public interface for the Gruze object store
     
@@ -104,7 +104,7 @@ module Data.Store.Gruze (
     -- object IO
     
     -- data handle
-    GrzHandle(..), getHandle, setDefaultSite, setThumbDefs, setLogLevel,
+    GrzHandle(..), setDefaultSite, setThumbDefs, setLogLevel,
     
     -- utility functions    
     grzLog, grzCommit, grzQuery,
@@ -132,11 +132,11 @@ module Data.Store.Gruze (
     
 ) where
 
-import Data.Store.Gruze.Box
-import Data.Store.Gruze.IO
-import Data.Store.Gruze.QueryDef
-import Data.Store.Gruze.Utility
-import Data.Store.Gruze.Types
+import Database.Gruze.Box
+import Database.Gruze.IO
+import Database.Gruze.QueryDef
+import Database.Gruze.Utility
+import Database.Gruze.Types
 
 import Data.Maybe
 import Data.Typeable

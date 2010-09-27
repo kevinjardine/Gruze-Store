@@ -2,14 +2,14 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Data.Store.Gruze.Templates (
+module Database.Gruze.Templates (
 
 defObj, defContainer, defOwner, defSite, defOwnerContainer
 
 ) where
 
-import Data.Store.Gruze.Box
-import Data.Store.Gruze.Types
+import Database.Gruze.Box
+import Database.Gruze.Types
 
 import Language.Haskell.TH
 import Data.Typeable

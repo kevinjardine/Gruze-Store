@@ -1,4 +1,4 @@
-module Data.Store.Gruze.Box (
+module Database.Gruze.Box (
 
     -- constructors (note that the internals of GrzObj are not exported)
     GrzObj, GrzBox(..),
@@ -65,7 +65,7 @@ module Data.Store.Gruze.Box (
 
 ) where
 
-import Data.Store.Gruze.Types
+import Database.Gruze.Types
 import qualified Data.Map as Map
 import Data.List (foldl')
 import Data.Maybe

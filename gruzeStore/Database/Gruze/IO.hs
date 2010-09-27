@@ -1,7 +1,7 @@
-module Data.Store.Gruze.IO (
+module Database.Gruze.IO (
     GrzHandle(..), 
     
-    grzLog, getHandle, grzCommit, setDefaultSite, setThumbDefs, setLogLevel,
+    grzLog, grzCommit, setDefaultSite, setThumbDefs, setLogLevel,
     
     -- query functions
     getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
@@ -24,12 +24,12 @@ module Data.Store.Gruze.IO (
 
 -- functions to manage objects, string handles and file handles
 
-import Data.Store.Gruze.Box
-import Data.Store.Gruze.Types
-import Data.Store.Gruze.QueryDef
-import Data.Store.Gruze.Handles
-import Data.Store.Gruze.Query
-import Data.Store.Gruze.Utility
+import Database.Gruze.Box
+import Database.Gruze.Types
+import Database.Gruze.QueryDef
+import Database.Gruze.Handles
+import Database.Gruze.Query
+import Database.Gruze.Utility
 
 import Database.HDBC
 -- import Database.HDBC.ODBC

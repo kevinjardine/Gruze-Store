@@ -1,9 +1,11 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-module Data.Store.Gruze.Types where
+{-# LANGUAGE ExistentialQuantification #-}
+module Database.Gruze.Types where
 
 import qualified Data.Map as Map
 import Data.Typeable
+import Database.HDBC
 
 -- * Basic types
 
@@ -138,3 +140,16 @@ data GrzOrderBy = GuidAsc | GuidDesc | TimeCreatedAsc | TimeCreatedDesc
     deriving (Eq,Show)
 
 data GrzDatabaseType = GrzSqlite3DB | GrzMySQLDB | GrzPostgreSQLDB
+
+data GrzHandle = forall a. IConnection a => GrzHandle {
+    grzDatabaseHandle ::  a,
+    grzDataDirectory :: FilePath,
+    grzConvertLocation :: FilePath,
+    grzLogFile :: FilePath,
+    grzDefaultSite :: GrzObj,
+    grzThumbDefs :: [(String,String)],
+    grzLogLevel :: GrzLogLevel,
+    grzDatabaseType :: GrzDatabaseType
+}
+
+data GrzQueryLocation = Exterior | Interior
