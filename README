@@ -42,13 +42,13 @@ ii. Change the Main.hs import to the appropriate driver.
 
 iii. Change the reference in gruzeTest.cabal to the appropriate driver.
 
-e. type
+f. type
 
 cabal install
 
 in gruzeTest
 
-f. find the gruzeTest executable in gruzeTest/dist/build/gruzeTest and run
+g. find the gruzeTest executable in gruzeTest/dist/build/gruzeTest and run
 it from a shell
 
-g. read gruzeTest/Main.hs for more information
+h. read gruzeTest/Main.hs for more information
