@@ -329,7 +329,7 @@ main = do
         . (withContainer post))
     
     -- get the sum and count of the value field of the relevant Ratings        
-    r <- getObjAggSumCount grzH
+    r <- getObjSumCount grzH
         ((hasType Rating)
         . (withSite (grzDefaultSite grzH))
         . (withContainer post))
@@ -350,8 +350,8 @@ main = do
         
     -- Examples of per object aggregation
     
-    -- This returns either a (object, count) pair using getObjAggByObjCount
-    -- or a (object,(sum,count)) pair using getObjAggByObjSumCount.
+    -- This returns either a (object, count) pair using getObjsAggByObjCount
+    -- or a (object,(sum,count)) pair using getObjsAggByObjSumCount.
     
     -- In this example, we are listing all blog posts with a count of the 
     -- comments and then queries with a sum and count of the all ratings
@@ -367,7 +367,7 @@ main = do
     
     putStrLn $ "\nPer object aggregation example \n(object, count of comments per blog post): "
     
-    raboc <- getObjAggByObjCount grzH Comment BlogPost
+    raboc <- getObjsAggByObjCount grzH Comment BlogPost
                 ((hasRel hasContainer InvRel) . (withSite (grzDefaultSite grzH)))
                 [] [] 0 0
             
@@ -380,7 +380,7 @@ main = do
             
     putStrLn $ "\nPer object aggregation example \n(object, sum and count of all ratings per blog post): "
     
-    rabosc <- getObjAggByObjSumCount grzH "value" Rating BlogPost
+    rabosc <- getObjsAggByObjSumCount grzH "value" Rating BlogPost
                 ((hasRel hasContainer InvRel) . (withSite (grzDefaultSite grzH)))
                 [] [SumAsc] 0 0
             
@@ -391,13 +391,13 @@ main = do
     -- This is a more complex example aggregating high value ratings for blog
     -- posts that are contained in blogs inside the teacher collection.
     -- Notice that we are using the "*" feature to retrieve all available
-    -- metadata for the returned objects, and agregating only on blog posts
+    -- metadata for the returned objects, and aggregating only on blog posts
     -- that have a defined "tags" field.
     
     putStrLn $ "\nPer object aggregation example \n"
                 ++ "(object, sum and count of high ratings per teacher blog post): "
     
-    rabosc2 <- getObjAggByObjSumCount grzH "value" Rating BlogPost
+    rabosc2 <- getObjsAggByObjSumCount grzH "value" Rating BlogPost
                 (   (hasOp "value" ">=" 4)
                     . (hasRel hasContainer InvRel)
                     . (hasData "tags") 

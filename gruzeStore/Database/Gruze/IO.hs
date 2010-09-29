@@ -5,7 +5,7 @@ module Database.Gruze.IO (
     
     -- query functions
     getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
-    getObjCount, getObjAggSumCount, getObjAggByObjCount, getObjAggByObjSumCount, 
+    getObjCount, getObjSumCount, getObjsAggByObjCount, getObjsAggByObjSumCount, 
     setSearchable,
     
     -- object IO
@@ -175,7 +175,7 @@ loadObj :: GrzObjClass o =>
     -> IO o      -- ^ The returned object
 loadObj grzH obj needs =
     do
-        objs <- getUnwrappedObjs grzH qd needs [] 0 1
+        objs <- getUnwrappedObjs grzH qd needs [] 1 0
         return $ case objs of
                     [] -> replaceObj obj emptyObj
                     a  -> replaceObj obj (head a)
@@ -479,10 +479,10 @@ getUnwrappedObjs :: GrzHandle           -- ^ data handle
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
     -> [String]                         -- ^ required metadata
     -> [GrzOrderBy]                     -- ^ order by
-    -> Int                              -- ^ offset
     -> Int                              -- ^ limit (number of objects to return)
+    -> Int                              -- ^ offset
     -> IO [GrzObj]                      -- ^ list of objects
-getUnwrappedObjs grzH queryDefs needs orderBy offset limit =
+getUnwrappedObjs grzH queryDefs needs orderBy limit offset =
     do
         query <- grzCreateQuery grzH ((withData needs) . (setOrderBy orderBy) . queryDefs)
         result <- runQuery grzH $ addToQuery limitBit query
@@ -501,10 +501,10 @@ getObjs :: GrzObjClass o =>
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
     -> [String]                         -- ^ required metadata
     -> [GrzOrderBy]                     -- ^ order by
-    -> Int                              -- ^ offset
     -> Int                              -- ^ limit (number of objects to return)
+    -> Int                              -- ^ offset
     -> IO [o]                           -- ^ list of objects
-getObjs grzH w queryDefs needs orderBy offset limit =
+getObjs grzH w queryDefs needs orderBy limit offset =
     do
         query <- grzCreateQuery grzH ((withData needs) . (setOrderBy orderBy).(hasType w) . queryDefs)
         result <- runQuery grzH $ addToQuery limitBit query 
@@ -519,10 +519,10 @@ getObjs grzH w queryDefs needs orderBy offset limit =
 getObjIDs :: GrzHandle                  -- ^ data handle
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
     -> [GrzOrderBy]                     -- ^ order by
-    -> Int                              -- ^ offset
     -> Int                              -- ^ limit (number of objects to return)
+    -> Int                              -- ^ offset
     -> IO [Int]                         -- ^ list of object IDs
-getObjIDs grzH queryDefs orderBy offset limit =
+getObjIDs grzH queryDefs orderBy limit offset =
     do
         query <- grzCreateQuery grzH ((setOrderBy orderBy) . queryDefs . (setQueryType GrzQTID))
         result <- runQuery grzH $ addToQuery limitBit query
@@ -540,10 +540,10 @@ getBareObjs :: GrzObjClass o =>
     -> (GrzObj -> o)                    -- ^ wrapper
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition
     -> [GrzOrderBy]                     -- ^ order by
-    -> Int                              -- ^ offset
     -> Int                              -- ^ limit (number of objects to return)
+    -> Int                              -- ^ offset
     -> IO [o]                           -- ^ list of objects
-getBareObjs grzH w queryDefs orderBy offset limit = 
+getBareObjs grzH w queryDefs orderBy limit offset = 
     fmap (map (w . GrzObjID) ) (getObjIDs grzH ((hasType w) . queryDefs) orderBy offset limit)
 
 {-|
@@ -555,10 +555,10 @@ getUnwrappedBareObjs ::
         GrzHandle                       -- ^ The data handle
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition
     -> [GrzOrderBy]                     -- ^ order by
-    -> Int                              -- ^ offset
     -> Int                              -- ^ limit (number of objects to return)
+    -> Int                              -- ^ offset
     -> IO [GrzObj]                           -- ^ list of objects
-getUnwrappedBareObjs grzH queryDefs orderBy offset limit = fmap (map GrzObjID) (getObjIDs grzH queryDefs orderBy offset limit)
+getUnwrappedBareObjs grzH queryDefs orderBy limit offset = fmap (map GrzObjID) (getObjIDs grzH queryDefs orderBy offset limit)
 
         
 {-|
@@ -576,20 +576,20 @@ getObjCount grzH queryDefs =
         return $ queryResultToCount result
                         
 {-|
-  The 'getObjAggByObjCount' function takes a query definition and two types.
+  The 'getObjsAggByObjCount' function takes a query definition and two types.
   It retrieves a list of objects with an aggregated count associated with each.
 -}        
-getObjAggByObjCount :: (GrzObjClass o1, GrzObjClass o2) =>
+getObjsAggByObjCount :: (GrzObjClass o1, GrzObjClass o2) =>
     GrzHandle                            -- ^ data handle
     -> (GrzObj -> o1)                    -- ^ wrapper for type to be aggregated
     -> (GrzObj -> o2)                    -- ^ wrapper for result type
     -> (GrzQueryDef -> GrzQueryDef)      -- ^ query definition
     -> [String]                         -- ^ required metadata
     -> [GrzOrderBy]                      -- ^ order by
-    -> Int                               -- ^ offset
     -> Int                               -- ^ limit (number of objects to return)
+    -> Int                               -- ^ offset
     -> IO [(o2, Int)]                    -- ^ (object, count) pair
-getObjAggByObjCount grzH w1 w2 queryDefs needs orderBy limit offset =
+getObjsAggByObjCount grzH w1 w2 queryDefs needs orderBy limit offset =
     do
         t2 <- maybeGetStringHandle grzH (objWrapperToString (w2 emptyObj))
         case t2 of
@@ -602,22 +602,22 @@ getObjAggByObjCount grzH w1 w2 queryDefs needs orderBy limit offset =
         limitBit = getLimitBit grzH offset limit
         
 {-|
-  The 'getObjAggByObjSumCount' function takes a query definition, a metadata 
+  The 'getObjsAggByObjSumCount' function takes a query definition, a metadata 
   name and two types. It retrieves a list of objects with an aggregated sum 
   (of the metadata value) and count associated with each.
 -}        
-getObjAggByObjSumCount :: (GrzObjClass o1, GrzObjClass o2) =>
+getObjsAggByObjSumCount :: (GrzObjClass o1, GrzObjClass o2) =>
     GrzHandle                            -- ^ data handle
     -> String                            -- ^ metadata name attached to values being aggregated
     -> (GrzObj -> o1)                    -- ^ wrapper for type to be aggregated
     -> (GrzObj -> o2)                    -- ^ wrapper for result type
     -> (GrzQueryDef -> GrzQueryDef)      -- ^ query definition
-    -> [String]                         -- ^ required metadata
+    -> [String]                          -- ^ required metadata
     -> [GrzOrderBy]                      -- ^ order by
-    -> Int                               -- ^ offset
     -> Int                               -- ^ limit (number of objects to return)
+    -> Int                               -- ^ offset
     -> IO [(o2, (Int,Int))]              -- ^ (object, count) pair
-getObjAggByObjSumCount grzH name w1 w2 queryDefs needs orderBy limit offset =
+getObjsAggByObjSumCount grzH name w1 w2 queryDefs needs orderBy limit offset =
     do
         t2 <- maybeGetStringHandle grzH (objWrapperToString (w2 emptyObj))
         case t2 of
@@ -634,15 +634,15 @@ getObjAggByObjSumCount grzH name w1 w2 queryDefs needs orderBy limit offset =
         limitBit = getLimitBit grzH offset limit
         
 {-|
-  The 'getObjAggSumCount' function takes a query definition and a metadata name.
+  The 'getObjSumCount' function takes a query definition and a metadata name.
   It retrieves a tuple (sum, count) of objects from the database that have 
   metadata integer values with that name.
 -}        
-getObjAggSumCount :: GrzHandle         -- ^ data handle
+getObjSumCount :: GrzHandle         -- ^ data handle
     -> (GrzQueryDef -> GrzQueryDef)    -- ^ query definition
     -> GrzString                       -- ^ metadata name 
     -> IO (Int, Int)                   -- ^ count of objects
-getObjAggSumCount grzH queryDefs name =
+getObjSumCount grzH queryDefs name =
     do
         query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggSumCount) . (hasData name))
         result <- runQuery grzH query

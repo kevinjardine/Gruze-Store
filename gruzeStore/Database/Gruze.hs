@@ -112,7 +112,7 @@ module Database.Gruze (
     
     -- query functions
     getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
-    getObjCount, getObjAggSumCount, getObjAggByObjCount, getObjAggByObjSumCount, 
+    getObjCount, getObjSumCount, getObjsAggByObjCount, getObjsAggByObjSumCount, 
     setSearchable,
     
     -- create, save, delete, disable, enable and load
