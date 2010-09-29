@@ -38,8 +38,6 @@ defObj(Rating)
 defRel(hasPermView)
 defRel(hasRole)
 
--- TODO: add withData as a parameter to getObjs etc.
-
 {-|
       This example application allows teachers to post to a special blog visible only to
       teachers and not students. Gruze does not provide one standard access control system
@@ -50,7 +48,7 @@ defRel(hasRole)
 main = do
 
     {-
-      Redefine the config parameters below to match your own MySQL and 
+      Redefine the config parameters below to match your own database and 
       file system configuration.
     -} 
     
@@ -159,24 +157,24 @@ main = do
     -- Reader monad or some other state monad to reduce parameter clutter          
     grzH' <- getHandle configSqlite3
        
-    -- delete any previous test site (and all its content)
+    -- delete any previous test temporary workspaces (and all their content)
     let testSitesQd = hasIn "subtype" ["grzTest"]
     testSites <- getBareObjs grzH' TemporaryWorkspace testSitesQd [] 0 0
     mapM_ (delObj grzH') testSites
     
-    -- create a site to hold all the test content    
-    site <- createTemporaryWorkspace grzH'
+    -- create a temporary workspace to hold all the test content    
+    workspace <- createTemporaryWorkspace grzH'
         "grzTest"
         "Test site"
         "Used for adding content to test out the Gruze object store."
     
     putStrLn "\nNew temporary workspace created:"     
-    putStrLn $ ppObj site
+    putStrLn $ ppObj workspace
     
     -- set the default site, log level and the thumb definitions
     let grzH = (setThumbDefs [("standard","80x80"),("small","32x32")])
                . (setLogLevel DebugLogLevel)
-               . (setDefaultSite site)
+               . (setDefaultSite workspace)
                $ grzH'
                  
     -- make some fields searchable
@@ -307,8 +305,10 @@ main = do
     -- Another query example, this time getting all the high Ratings (>= 4) 
     -- for John's BlogPost.
     
-    -- Notice the reverse "-hasContainer" relationship, which gets all the
-    -- objects within a container.
+    -- Notice the inverse hasContainer relationship, which gets all the
+    -- objects within a container. We are not explicitly setting an order by
+    -- option so the results will default to sorting by guid descending (newest
+    -- first).
     
     putStrLn "\nAll high ratings of John's blog post:" 
     let ccqd =  (hasOp "value" ">=" 4)
@@ -375,20 +375,27 @@ main = do
                 ("(" ++ (ppObj o) ++ "," ++ (show c) ++ ")\n")
             ) raboc
             
+    -- Notice in this example that we are sorting by sum ascending, so the highest
+    -- sums will be displayed last.
+            
     putStrLn $ "\nPer object aggregation example \n(object, sum and count of all ratings per blog post): "
     
     rabosc <- getObjAggByObjSumCount grzH "value" Rating BlogPost
                 ((hasRel hasContainer InvRel) . (withSite (grzDefaultSite grzH)))
-                [] [SumAsc,StringAsc "tags"] 0 0
+                [] [SumAsc] 0 0
             
     putStrLn $ concatMap (\(o,(s,c)) -> 
                 ("(" ++ (ppObj o) ++ ",(" ++ (show s) ++ "," ++ (show c) ++ "))\n")
             ) rabosc
             
-    -- a more complex example aggregating high value ratings for blog posts
-    -- that are contained in blogs inside the teacher collection
+    -- This is a more complex example aggregating high value ratings for blog
+    -- posts that are contained in blogs inside the teacher collection.
+    -- Notice that we are using the "*" feature to retrieve all available
+    -- metadata for the returned objects, and agregating only on blog posts
+    -- that have a defined "tags" field.
     
-    putStrLn $ "\nPer object aggregation example \n(object, sum and count of high ratings per teacher blog post): "
+    putStrLn $ "\nPer object aggregation example \n"
+                ++ "(object, sum and count of high ratings per teacher blog post): "
     
     rabosc2 <- getObjAggByObjSumCount grzH "value" Rating BlogPost
                 (   (hasOp "value" ">=" 4)
@@ -508,7 +515,9 @@ rateBlogPost grzH post rater rating = do
             
 -- An example generic search function
 -- Searches for enabled content that the given user has permission to see.
--- As the result might include types unknown by this program, returns unwrapped objects.                    
+-- As the result might include types unknown by this program, returns unwrapped
+--  objects. Notice that we are sorting by guid ascending, so the oldest 
+-- objects are returned first.                
 searchForContent :: GrzHandle -> User -> String -> IO [GrzObj]
 searchForContent grzH user s = do
     getUnwrappedObjs grzH qd [] [GuidAsc] 0 0
