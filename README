@@ -1,9 +1,21 @@
-Gruze is a persistent object store written in Haskell.
+Gruze is a persistent object store and querying library written in Haskell.
+It is intended for use with applications that require flexible and
+over-rideable data models (for example a web application with a plugin
+architecture that allows adding new features and data to existing
+functions).
 
 This is currently beta quality code tested with Sqlite3, MySQL (both native and
 ODBC drivers) and PostgreSQL
 
 An example model (blogging with multiple user roles) can be found in gruzeTest.
+
+An overview document (PDF format) can be found here:
+
+http://github.com/downloads/kevinjardine/Gruze-Store/gruzeoverview.pdf
+
+This overview is intended for developers with only basic Haskell experience
+but parts of it (especially the section on the querying functions) may be of
+interest to more experienced Haskell developers as well.
 
 To try this out:
 
@@ -11,19 +23,24 @@ a. cd to gruzeStore and type
 
 cabal install
 
-b. create a database and run the appropriate schema in gruzeStore/schema to add
+b. select and compile the appropriate database driver from the four supplied.
+
+c. create a database and run the appropriate schema in gruzeStore/schema to add
 the required tables
 
-c. copy the data directory somewhere and make it writable by Haskell
+d. copy the data directory somewhere and make it writable by Haskell
 
-d. cd to gruzeTest and edit the config values near the top of Main.hs
-to match your own configuration. There are four sample config settings.
+e. cd to gruzeTest and edit the config values near the top of Main.hs
+to match your own configuration. There are four sample config settings, with
+the simplest (Sqlite3) set as the default.
 
-You will need to choose one and edit the getHandle function below to pass the
-appropriate config settings.
+If you are using something other than Sqlite3, you will also need to:
 
-You will also need to select and compile the appropriate database driver
-from the four supplied.
+i. Edit the getHandle function call to pass the appropriate config settings.
+
+ii. Change the Main.hs import to the appropriate driver.
+
+iii. Change the reference in gruzeTest.cabal to the appropriate driver.
 
 e. type
 
@@ -35,5 +52,3 @@ f. find the gruzeTest executable in gruzeTest/dist/build/gruzeTest and run
 it from a shell
 
 g. read gruzeTest/Main.hs for more information
-
-Eventually there will be a test suite and full documentation.
