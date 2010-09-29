@@ -293,14 +293,7 @@ grzGetQuery grzH ((m,n), q) =
                         Just j -> " AND ((ma.nameId IS NULL) OR (ma.nameId = " ++ (show j) 
                             ++ " AND ma.metadataType = 0)) " 
                         Nothing -> ""
-        sqlIndex = case queryType of
-                    GrzQTCount                  -> "count"
-                    GrzQTID                     -> "guid"
-                    GrzQTFull                   -> "full"
-                    GrzQTAggSumCount            -> "agg_sumcount"
-                    GrzQTAggByObjCount _        -> "aggbyobj_count"
-                    GrzQTAggByObjSumCount _ _   -> "aggbyobj_sumcount"
-        sqlFrags = fromJust $ lookup sqlIndex sqlDict
+        sqlFrags = fromJust $ lookup (sqlIndex queryType) sqlDict
         selectBit = getSelects q    
         prefix = (fst sqlFrags) 
                     ++ if queryType `elem` [GrzQTAggCount,GrzQTAggSumCount] 
@@ -321,7 +314,14 @@ grzGetQuery grzH ((m,n), q) =
                                                 ++ " FROM objects obj0 "
 
         suffix = snd sqlFrags
-                    
+        
+sqlIndex queryType = case queryType of
+                    GrzQTCount                  -> "count"
+                    GrzQTID                     -> "guid"
+                    GrzQTFull                   -> "full"
+                    GrzQTAggSumCount            -> "agg_sumcount"
+                    GrzQTAggByObjCount _        -> "aggbyobj_count"
+                    GrzQTAggByObjSumCount _ _   -> "aggbyobj_sumcount"                    
 sqlDict = [
     ("full",(
         "SELECT q1.objGuid, n.string, timeCreated, timeUpdated, ownerGuid, containerGuid, siteGuid, enabled FROM (",
@@ -460,35 +460,51 @@ runQuery grzH (Just (((query,queryType),handleDict),(needs,values))) =
 
         -- get the metadata if it was requested, this is a full query, 
         -- and some objects were retrieved
-        if (queryType /= GrzQTFull) || (null needs) || (null r)
+        if (not ((sqlIndex queryType) `elem` ["full","aggbyobj_count","aggbyobj_sumcount"])) || (null needs) || (null r)
             then
                 return (r, (handleDict,[]))
             else do
-                -- first step - get the extra string handles in needs but not in dict
-                let stillNeeded = filter (\x -> x `notElem` (map fst handleDict)) needs
-                hs <- mapM (maybeGetStringHandle grzH) stillNeeded
-                let hd = handleDict ++ (map fromJust (filter isJust hs))
-                
-                -- newNeeds contains names with existing string handles
-                let newNeeds = filter (\x -> x `elem` (map fst hd)) needs
-                
-                -- nhd contains all the available string handles for the requested data names
-                let nhd = filter (\x -> (fst x) `elem` needs) hd
-                if null nhd
-                    then
-                        -- oops, all the requested data names were invalid, so return no metadata
-                        return (r, (handleDict,[]))
-                    else do
-                        -- ok, we have string handles for the names of the metadata to retrieve
-                        -- so build the query to get the data
+                if head needs == "*"
+                    then do
+                        -- this is asking for all the metadata
                         let startBit = "SELECT m.* FROM metadata m WHERE"
-                        let needsBit = " m.nameId IN (" ++ (intercalate "," (map (show . snd) nhd)) ++ ") AND "
                         let objBit = " m.objectGuid IN (" ++ (intercalate "," (map show $ getObjIDListFromQueryResult r)) ++ ") "
-                        let needsQuery = startBit ++ needsBit ++ objBit
+                        let needsQuery = startBit ++ objBit
                         r2 <- grzQuery grzH needsQuery []
-                        return (r, (hd, r2))
+                        -- need an extra query to return all metadata keys
+                        let keysQuery = "SELECT m.nameId, n.string FROM metadata m "
+                                ++ "INNER JOIN names n ON (m.nameId = n.id) WHERE " ++ objBit 
+                                ++ " GROUP BY m.nameId, n.string "
+                        r3 <- grzQuery grzH keysQuery []
+                        return (r, ((map getHandleFromKeysQuery r3), r2))
+                   else do
+                        -- first step - get the extra string handles in needs but not in dict
+                        let stillNeeded = filter (\x -> x `notElem` (map fst handleDict)) needs
+                        hs <- mapM (maybeGetStringHandle grzH) stillNeeded
+                        let hd = handleDict ++ (map fromJust (filter isJust hs))
+                        
+                        -- newNeeds contains names with existing string handles
+                        let newNeeds = filter (\x -> x `elem` (map fst hd)) needs
+                        
+                        -- nhd contains all the available string handles for the requested data names
+                        let nhd = filter (\x -> (fst x) `elem` needs) hd
+                        if null nhd
+                            then
+                                -- oops, all the requested data names were invalid, so return no metadata
+                                return (r, (handleDict,[]))
+                            else do
+                                -- ok, we have string handles for the names of the metadata to retrieve
+                                -- so build the query to get the data
+                                let startBit = "SELECT m.* FROM metadata m WHERE"
+                                let needsBit = " m.nameId IN (" ++ (intercalate "," (map (show . snd) nhd)) ++ ") AND "
+                                let objBit = " m.objectGuid IN (" ++ (intercalate "," (map show $ getObjIDListFromQueryResult r)) ++ ") "
+                                let needsQuery = startBit ++ needsBit ++ objBit
+                                r2 <- grzQuery grzH needsQuery []
+                                return (r, (hd, r2))
                                 
 runQuery grzH Nothing = return ([],([],[]))
+
+getHandleFromKeysQuery [id, s] = (((fromSql s) :: String),((fromSql id) :: Int))
 
 getObjIDListFromQueryResult r = map (\x -> ((fromSql (head x)) :: Int)) r
 

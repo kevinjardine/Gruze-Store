@@ -18,8 +18,8 @@ hasType, hasTypes,
 hasEnabled, hasDisabled,
 
 -- by the fixed relationships
-hasOwner, hasContainer, hasSite,
-hasOwners, hasContainers, hasSites,
+withOwner, withContainer, withSite,
+withOwners, withContainers, withSites,
 
 -- by general relationships
 hasRel,
@@ -154,41 +154,32 @@ hasFixed ref objList ((m,n), x) =
         field = fromJust $ lookup ref refDict
 
 -- the public functions
-hasOwners :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef   
-hasOwners = hasFixed OwnerRef
+withOwners :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef   
+withOwners = hasFixed OwnerRef
     
-hasOwner o = hasOwners [o]
+withOwner o = withOwners [o]
 
-hasContainers :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef
-hasContainers = hasFixed ContainerRef
+withContainers :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef
+withContainers = hasFixed ContainerRef
     
-hasContainer o = hasContainers [o]
+withContainer o = withContainers [o]
 
-hasSites :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef
-hasSites = hasFixed SiteRef
+withSites :: GrzObjClass o => [o] -> GrzQueryDef -> GrzQueryDef
+withSites = hasFixed SiteRef
    
-hasSite o = hasSites [o]
+withSite o = withSites [o]
 
 -- relationships
 
-hasRel :: String 
+hasRel :: GrzRel
+    -> GrzRelDir
     -> GrzQueryDef
     -> GrzQueryDef
-hasRel rel =
-    if isSpecial rel'
-        then handleRelSpecial rel' dir
-        else handleRel rel' dir
+hasRel (GrzRel rel) dir =
+    if isSpecial rel
+        then handleRelSpecial rel dir
+        else handleRel rel dir
     where
-        dir = if null rel
-                then ForwardRel
-                else if head rel == '-'
-                        then BackwardRel
-                        else ForwardRel
-        rel' = if null rel
-                then rel
-                else if (head rel) `elem` ['-','+']
-                        then tail rel
-                        else rel
         isSpecial rel = rel `elem` ["hasContainer","hasOwner","hasSite"]
 
 -- the three special relationships: hasContainer, hasOwner and hasSite
@@ -209,11 +200,11 @@ handleRelSpecial rel dir ((m,n), x) =
                     "hasOwner" -> ".ownerGuid"
                     "hasSite" -> ".siteGuid"
         guidA = case dir of 
-                    ForwardRel -> field
-                    BackwardRel -> ".guid"
+                    FwdRel -> field
+                    InvRel -> ".guid"
         guidB = case dir of
-                    ForwardRel -> ".guid"
-                    BackwardRel -> field
+                    FwdRel -> ".guid"
+                    InvRel -> field
 
 -- the usual case with a join to the relationship table   
 handleRel :: String
@@ -237,11 +228,11 @@ handleRel rel dir ((m,n), x) =
         ) : x)
      where
         guidA = case dir of 
-                    ForwardRel -> ".guid1"
-                    BackwardRel -> ".guid2"
+                    FwdRel -> ".guid1"
+                    InvRel -> ".guid2"
         guidB = case dir of
-                    ForwardRel -> ".guid2"
-                    BackwardRel -> ".guid1"
+                    FwdRel -> ".guid2"
+                    InvRel -> ".guid1"
        
 hasAtomOp :: String -> String -> [GrzAtom] -> GrzQueryDef -> GrzQueryDef   
 hasAtomOp name op values ((m,n), x) =
@@ -286,12 +277,12 @@ class GrzQueryTypeClass qt where
     
 instance GrzQueryTypeClass GrzString where
     hasIn name values = hasAtomIn name (map stringToAtom values)
-    hasBetween name (v0,v1) = hasAtomOp name "><" (map stringToAtom [v0,v1])
+    hasBetween name (v0,v1) = hasAtomOp name "=><=" (map stringToAtom [v0,v1])
     hasOp name op value = hasAtomOp name op (map stringToAtom [value])
     
 instance GrzQueryTypeClass GrzInt where
     hasIn name values = hasAtomIn name (map intToAtom values)
-    hasBetween name (v0,v1) = hasAtomOp name "><" (map intToAtom [v0,v1]) 
+    hasBetween name (v0,v1) = hasAtomOp name "=><=" (map intToAtom [v0,v1]) 
     hasOp name op value = hasAtomOp name op (map intToAtom [value])
     
 hasTrue :: String -> GrzQueryDef -> GrzQueryDef
@@ -359,7 +350,7 @@ getAtomClause atoms (m,n) op =
                             ++ (getOpBit op (mname ++ ".stringValue") stringAtoms)  ++ ")"
 
 -- normalises op
-normaliseOp = [("in", "IN"),("In","IN"),("IN","IN"),("iN","IN"),("><","><") ,
+normaliseOp = [("in", "IN"),("In","IN"),("IN","IN"),("iN","IN"),("><","><") , ("=><=","=><="),
     ("<","<"),("<=","<="),("=","="),(">",">"),(">=",">="),("match","match")]
                         
 -- generate the condition bit
@@ -368,6 +359,7 @@ normaliseOp = [("in", "IN"),("In","IN"),("IN","IN"),("iN","IN"),("><","><") ,
 getOpBit :: String -> String -> [GrzAtom] -> String
 getOpBit "IN" var atoms = " ( " ++ var ++ " IN (" ++ (intercalate "," $ map toMark atoms) ++ ")) "
 getOpBit "><" var _ = " ( " ++ var ++ " > ? AND " ++ var ++ " < ? ) "
+getOpBit "=><=" var _ = " ( " ++ var ++ " >= ? AND " ++ var ++ " <= ? ) "
 getOpBit "match" var _ = " ( " ++ var ++ " LIKE ? ) "
 getOpBit op var _ = " ( " ++ var ++ " " ++ op ++ " ? ) "
 

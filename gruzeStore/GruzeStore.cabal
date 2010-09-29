@@ -18,8 +18,7 @@ build-depends:      base >= 4 && < 5, containers, split, HDBC, bytestring,
                     template-haskell
                     
 exposed-modules:    Database.Gruze,
-                    Database.Gruze.Box,
-                    Database.Gruze.Templates
+                    Database.Gruze.Box
                     
 other-modules:      Database.Gruze.Types,
                     Database.Gruze.IO,

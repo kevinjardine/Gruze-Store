@@ -5,7 +5,7 @@ module Database.Gruze (
     -- first the atom, box and object constructors, getters and setters
     
     -- constructors (note that the internals of GrzObj are not exported)
-    GrzObj, GrzBox(..),
+    GrzObj, GrzBox(..), GrzRel(..),
     
     -- classes
     
@@ -86,8 +86,9 @@ module Database.Gruze (
     hasEnabled, hasDisabled,
     
     -- by the fixed relationships
-    hasOwner, hasContainer, hasSite,
-    hasOwners, hasContainers, hasSites,
+    -- by the fixed relationships
+    withOwner, withContainer, withSite,
+    withOwners, withContainers, withSites,
     
     -- by general relationships
     hasRel,
@@ -122,7 +123,7 @@ module Database.Gruze (
     createFileAtom, maybeGetFileMetadata, maybeGetFileContent, maybeGetFileThumb,
     
     -- relationship IO
-    addRel, delRel, checkRel,
+    addRel, delRel, checkRel, hasContainer, hasOwner, hasSite,
     
     -- rexport some basic modules
     

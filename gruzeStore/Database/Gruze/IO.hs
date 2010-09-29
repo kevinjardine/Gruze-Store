@@ -19,7 +19,7 @@ module Database.Gruze.IO (
     createFileAtom, maybeGetFileMetadata, maybeGetFileContent, maybeGetFileThumb,
     
     -- relationship IO
-    addRel, delRel, checkRel
+    addRel, delRel, checkRel, hasContainer, hasOwner, hasSite
 ) where
 
 -- functions to manage objects, string handles and file handles
@@ -175,12 +175,12 @@ loadObj :: GrzObjClass o =>
     -> IO o      -- ^ The returned object
 loadObj grzH obj needs =
     do
-        objs <- getUnwrappedObjs grzH qd [] 0 1
+        objs <- getUnwrappedObjs grzH qd needs [] 0 1
         return $ case objs of
                     [] -> replaceObj obj emptyObj
                     a  -> replaceObj obj (head a)
     where
-        qd = (withObjs [obj]) . (withData needs)
+        qd = (withObjs [obj])
         
 maybeLoadObj :: GrzObjClass o => 
     GrzHandle           -- ^ The data handle
@@ -277,15 +277,15 @@ delObjByID grzH guid =
         grzRunSql grzH relationship_query $ [toSql guid,toSql guid]
         
         -- delete the owned objects
-        owned <- getObjIDs grzH (hasOwners [GrzObjID guid]) [] 0 0
+        owned <- getObjIDs grzH (withOwners [GrzObjID guid]) [] 0 0
         mapM_ (delObjByID grzH) owned
         
         -- delete the contained objects
-        contained <- getObjIDs grzH (hasContainers [GrzObjID guid]) [] 0 0
+        contained <- getObjIDs grzH (withContainers [GrzObjID guid]) [] 0 0
         mapM_ (delObjByID grzH) contained
         
         -- delete the objects that have this object as a site
-        sited <- getObjIDs grzH (hasSites [GrzObjID guid]) [] 0 0
+        sited <- getObjIDs grzH (withSites [GrzObjID guid]) [] 0 0
         mapM_ (delObjByID grzH) sited
         
         -- delete the object from the object table
@@ -313,15 +313,15 @@ setEnableObjByID grzH state guid  =
     do
         
         -- set the enable state on the owned objects
-        owned <- getObjIDs grzH (hasOwners [GrzObjID guid]) [] 0 0
+        owned <- getObjIDs grzH (withOwners [GrzObjID guid]) [] 0 0
         mapM_ (setEnableObjByID grzH state) owned
         
         -- set the enable state on the contained objects
-        contained <- getObjIDs grzH (hasContainers [GrzObjID guid]) [] 0 0
+        contained <- getObjIDs grzH (withContainers [GrzObjID guid]) [] 0 0
         mapM_ (setEnableObjByID grzH state) contained
         
         -- set the enable state on the objects that have this object as a site
-        sited <- getObjIDs grzH (hasSites [GrzObjID guid]) [] 0 0
+        sited <- getObjIDs grzH (withSites [GrzObjID guid]) [] 0 0
         mapM_ (setEnableObjByID grzH state) sited
         
         -- set the enable state on the object itself
@@ -354,20 +354,19 @@ ppObj = ppObj' . unwrapObj
 
 ppObj' :: GrzObj -> String
 ppObj' (GrzObjID i) = "object " ++ (show i)
-ppObj' obj = "object " 
+ppObj' obj = (getType obj)
+                ++ " "
                 ++ (show $ getID obj) 
-                ++ " [" ++ (getType obj) 
-                ++ "]"
 
 ppObjFull :: GrzObjClass o => o -> String
 ppObjFull = ppObjFull' . unwrapObj
 
 ppObjFull' :: GrzObj -> String
 ppObjFull' (GrzObjID i) = "object " ++ (show i)
-ppObjFull' obj = "\nobject " 
+ppObjFull' obj = (getType obj)
+                ++ " "
                 ++ (show $ getID obj) 
-                ++ " [" ++ (getType obj) 
-                ++ "] {\n\n"
+                ++ " {\n\n"
                 ++ "    timeCreated: \t"
                 ++ (convertTime $ getTimeCreated obj)
                 ++ "\n    timeUpdated: \t"
@@ -398,10 +397,10 @@ ppAtomList v = intercalate ", " (map ppAtom v)
 -- relationship functions
 -- TODO: make relationships full types and not just strings                    
 
-addRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> String -> o1 -> o2 -> IO ()
-addRel grzH rel obj1 obj2 =
+addRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> GrzRel -> o1 -> o2 -> IO ()
+addRel grzH (GrzRel rel) obj1 obj2 =
     do
-        b <- checkRel grzH rel obj1 obj2
+        b <- checkRel grzH (GrzRel rel) obj1 obj2
         if b
             then
                 return ()
@@ -415,8 +414,8 @@ addRel grzH rel obj1 obj2 =
     where
         query = "INSERT INTO relationships(guid1,guid2,relationshipType,timeCreated) VALUES(?,?,?,?)"
         
-delRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> String -> o1 -> o2 -> IO ()
-delRel grzH rel obj1 obj2 =
+delRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> GrzRel -> o1 -> o2 -> IO ()
+delRel grzH (GrzRel rel) obj1 obj2 =
     do
         maybeH <- maybeGetStringHandle grzH rel
         case maybeH of
@@ -427,8 +426,8 @@ delRel grzH rel obj1 obj2 =
     where
         query = "DELETE FROM relationships WHERE guid1 = ? AND guid2 = ? AND relationshipType = ?"   
    
-checkRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> String -> o1 -> o2 -> IO Bool
-checkRel grzH rel obj1 obj2 =
+checkRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> GrzRel -> o1 -> o2 -> IO Bool
+checkRel grzH (GrzRel rel) obj1 obj2 =
     do
         maybeH <- maybeGetStringHandle grzH rel
         case maybeH of
@@ -438,6 +437,11 @@ checkRel grzH rel obj1 obj2 =
                 return $ not $ null val
     where
         query = "SELECT * FROM relationships WHERE guid1 = ? AND guid2 = ? AND relationshipType = ?" 
+        
+-- define the three special relationships
+hasContainer = GrzRel "hasContainer"
+hasOwner = GrzRel "hasOwner"
+hasSite = GrzRel "hasSite"
         
 {-|
   setSearchable tells the object store which fields are searchable.
@@ -473,13 +477,14 @@ setSearchable grzH w ns = do
 -}        
 getUnwrappedObjs :: GrzHandle           -- ^ data handle
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
+    -> [String]                         -- ^ required metadata
     -> [GrzOrderBy]                     -- ^ order by
     -> Int                              -- ^ offset
     -> Int                              -- ^ limit (number of objects to return)
     -> IO [GrzObj]                      -- ^ list of objects
-getUnwrappedObjs grzH queryDefs orderBy offset limit =
+getUnwrappedObjs grzH queryDefs needs orderBy offset limit =
     do
-        query <- grzCreateQuery grzH ((setOrderBy orderBy) . queryDefs)
+        query <- grzCreateQuery grzH ((withData needs) . (setOrderBy orderBy) . queryDefs)
         result <- runQuery grzH $ addToQuery limitBit query
         return $ queryResultToObjs result
     where
@@ -494,13 +499,14 @@ getObjs :: GrzObjClass o =>
         GrzHandle                       -- ^ data handle
     -> (GrzObj -> o)                    -- ^ wrapper
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
+    -> [String]                         -- ^ required metadata
     -> [GrzOrderBy]                     -- ^ order by
     -> Int                              -- ^ offset
     -> Int                              -- ^ limit (number of objects to return)
     -> IO [o]                           -- ^ list of objects
-getObjs grzH w queryDefs orderBy offset limit =
+getObjs grzH w queryDefs needs orderBy offset limit =
     do
-        query <- grzCreateQuery grzH ((setOrderBy orderBy).(hasType w) . queryDefs)
+        query <- grzCreateQuery grzH ((withData needs) . (setOrderBy orderBy).(hasType w) . queryDefs)
         result <- runQuery grzH $ addToQuery limitBit query 
         return $ map w (queryResultToObjs result)
     where
@@ -578,17 +584,18 @@ getObjAggByObjCount :: (GrzObjClass o1, GrzObjClass o2) =>
     -> (GrzObj -> o1)                    -- ^ wrapper for type to be aggregated
     -> (GrzObj -> o2)                    -- ^ wrapper for result type
     -> (GrzQueryDef -> GrzQueryDef)      -- ^ query definition
+    -> [String]                         -- ^ required metadata
     -> [GrzOrderBy]                      -- ^ order by
     -> Int                               -- ^ offset
     -> Int                               -- ^ limit (number of objects to return)
     -> IO [(o2, Int)]                    -- ^ (object, count) pair
-getObjAggByObjCount grzH w1 w2 queryDefs orderBy limit offset =
+getObjAggByObjCount grzH w1 w2 queryDefs needs orderBy limit offset =
     do
         t2 <- maybeGetStringHandle grzH (objWrapperToString (w2 emptyObj))
         case t2 of
             Nothing -> return []
             Just (_,i2) -> do
-                query <- grzCreateQuery grzH ((setAggOrderBy orderBy) . (hasType w1) . queryDefs . (setQueryType (GrzQTAggByObjCount i2)))
+                query <- grzCreateQuery grzH ((withData needs) . (setAggOrderBy orderBy) . (hasType w1) . queryDefs . (setQueryType (GrzQTAggByObjCount i2)))
                 result <- runQuery grzH $ addToQuery limitBit query 
                 return $ queryResultToAggByObjCount w2 result
    where
@@ -605,11 +612,12 @@ getObjAggByObjSumCount :: (GrzObjClass o1, GrzObjClass o2) =>
     -> (GrzObj -> o1)                    -- ^ wrapper for type to be aggregated
     -> (GrzObj -> o2)                    -- ^ wrapper for result type
     -> (GrzQueryDef -> GrzQueryDef)      -- ^ query definition
+    -> [String]                         -- ^ required metadata
     -> [GrzOrderBy]                      -- ^ order by
     -> Int                               -- ^ offset
     -> Int                               -- ^ limit (number of objects to return)
     -> IO [(o2, (Int,Int))]              -- ^ (object, count) pair
-getObjAggByObjSumCount grzH name w1 w2 queryDefs orderBy limit offset =
+getObjAggByObjSumCount grzH name w1 w2 queryDefs needs orderBy limit offset =
     do
         t2 <- maybeGetStringHandle grzH (objWrapperToString (w2 emptyObj))
         case t2 of
@@ -619,7 +627,7 @@ getObjAggByObjSumCount grzH name w1 w2 queryDefs orderBy limit offset =
                 case mn of
                     Nothing -> return []
                     Just (_,n) -> do
-                        query <- grzCreateQuery grzH ((setAggOrderBy orderBy) . (hasType w1) . queryDefs . (setQueryType (GrzQTAggByObjSumCount i2 n)))
+                        query <- grzCreateQuery grzH ((withData needs) . (setAggOrderBy orderBy) . (hasType w1) . queryDefs . (setQueryType (GrzQTAggByObjSumCount i2 n)))
                         result <- runQuery grzH $ addToQuery limitBit query 
                         return $ queryResultToAggByObjSumCount w2 result
    where

@@ -124,11 +124,15 @@ instance GrzObjBoxClass GrzBox where
     getObjBox c = objBox c
     putObjBox b c = c { objBox = b }
     
+-- Gruze relationships
+
+data GrzRel = GrzRel { getGrzRelString :: String }
+    
+data GrzRelDir = FwdRel | InvRel
+    deriving Eq
+    
 data GrzLogLevel = DebugLogLevel | NotificationLogLevel | WarningLogLevel | FatalLogLevel
     deriving (Eq, Ord)
-    
-data GrzRelDir = ForwardRel | BackwardRel
-    deriving Eq
     
 data GrzRef =  ObjRef | ContainerRef | OwnerRef | SiteRef
     deriving Eq
