@@ -2,7 +2,7 @@ Gruze is a persistent object store and querying library written in Haskell.
 It is intended for use with applications that require flexible and
 over-rideable data models (for example a web application with a plugin
 architecture that allows adding new features and data to existing
-functions).
+functionality).
 
 This is currently beta quality code tested with Sqlite3, MySQL (both native and
 ODBC drivers) and PostgreSQL
