@@ -1,3 +1,6 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 module Database.Gruze.Box (
 
     -- constructors (note that the internals of GrzObj are not exported)
@@ -29,33 +32,12 @@ module Database.Gruze.Box (
     
     -- atom box functions
     
-    emptyAtomBox,
-    
-    -- for atoms
-    
-    setAtom, addAtom, setAtomList, addAtomList, addAtomPair, addAtomPairs, 
-    getAtom, getAtomList, maybeGetAtom, maybeGetAtomList, removeFromAtomBox,
-    getKeysFromAtomBox,
-    
-    -- for strings
-    
-    setString, addString, setStringList, addStringList, getString, 
-    maybeGetString, getStringList, maybeGetStringList,
-    
-    -- for ints
-    
-    setInt, addInt, setIntList, addIntList, getInt, 
-    maybeGetInt, getIntList, maybeGetIntList,
-    
-    -- for bools
-    
-    setBool, addBool, setBoolList, addBoolList, getBool, 
-    maybeGetBool, getBoolList, maybeGetBoolList,
+    emptyAtomBox, addAtomPair, addAtomPairs, removeFromAtomBox, 
+    getKeysFromAtomBox, fields,
     
     -- object box functions 
 
     setObj, getObj, maybeGetObj, removeFromObjBox, getKeysFromObjBox, 
-    -- getMetadata, setMetadata
     
     -- rexport some basic modules
     
@@ -208,11 +190,21 @@ maybeGetAtom k c = case Map.lookup k (getAtomBox c) of
 maybeGetAtomList :: GrzAtomBoxClass c => GrzKey -> c -> Maybe [GrzAtom]                        
 maybeGetAtomList k c = Map.lookup k (getAtomBox c)
 
-removeFromAtomBox :: GrzAtomBoxClass c => GrzKey -> c -> c
-removeFromAtomBox k c = putAtomBox (Map.delete k (getAtomBox c)) c
+removeFromAtomBox :: (GrzAtomBoxClass c, GrzAtomKeyClass k) => GrzAtomKey k -> c -> c
+removeFromAtomBox k c = putAtomBox (Map.delete (atomKey k) (getAtomBox c)) c
 
 getKeysFromAtomBox :: GrzAtomBoxClass c => c -> [GrzKey]
 getKeysFromAtomBox c = Map.keys (getAtomBox c)
+
+instance GrzAtomKeyClass GrzAtom where
+    set k t b = setAtom (atomKey k) t b
+    add k t b = addAtom (atomKey k) t b
+    get k t b = getAtom (atomKey k) t b
+    maybeGet k b = maybeGetAtom (atomKey k) b
+    setList k t b = setAtomList (atomKey k) t b
+    addList k t b = addAtomList (atomKey k) t b
+    getList k t b = getAtomList (atomKey k) t b
+    maybeGetList k b = maybeGetAtomList (atomKey k) b
 
 -- string getters and setters
     
@@ -260,6 +252,16 @@ maybeGetStringList k c =
                     else
                         Nothing
                         
+instance GrzAtomKeyClass GrzString where
+    set k t b = setString (atomKey k) t b
+    add k t b = addString (atomKey k) t b
+    get k t b = getString (atomKey k) t b
+    maybeGet k b = maybeGetString (atomKey k) b
+    setList k t b = setStringList (atomKey k) t b
+    addList k t b = addStringList (atomKey k) t b
+    getList k t b = getStringList (atomKey k) t b
+    maybeGetList k b = maybeGetStringList (atomKey k) b
+                        
 -- int getters and setters
     
 setInt :: GrzAtomBoxClass c => GrzKey -> GrzInt -> c -> c
@@ -306,6 +308,16 @@ maybeGetIntList k c =
                     else
                         Nothing
                         
+instance GrzAtomKeyClass GrzInt where
+    set k t b = setInt (atomKey k) t b
+    add k t b = addInt (atomKey k) t b
+    get k t b = getInt (atomKey k) t b
+    maybeGet k b = maybeGetInt (atomKey k) b
+    setList k t b = setIntList (atomKey k) t b
+    addList k t b = addIntList (atomKey k) t b
+    getList k t b = getIntList (atomKey k) t b
+    maybeGetList k b = maybeGetIntList (atomKey k) b
+                        
 -- bool getters and setters
     
 setBool :: GrzAtomBoxClass c => GrzKey -> Bool -> c -> c
@@ -351,6 +363,16 @@ maybeGetBoolList k c =
                         Just (map atomToBool a)
                     else
                         Nothing
+                        
+instance GrzAtomKeyClass Bool where
+    set k t b = setBool (atomKey k) t b
+    add k t b = addBool (atomKey k) t b
+    get k t b = getBool (atomKey k) t b
+    maybeGet k b = maybeGetBool (atomKey k) b
+    setList k t b = setBoolList (atomKey k) t b
+    addList k t b = addBoolList (atomKey k) t b
+    getList k t b = getBoolList (atomKey k) t b
+    maybeGetList k b = maybeGetBoolList (atomKey k) b
                         
 -- TODO: file getters and setters
 -- as files cannot be forged, not sure how to do that yet
@@ -434,38 +456,20 @@ setType t obj = obj { objType = t }
 emptyBareObj = GrzObjID 0
 emptyObj = GrzObjFull 0 "" 0 0 emptyBareObj emptyBareObj emptyBareObj True emptyAtomBox
 
+-- | a polyvariadic function that takes typed keys and converts
+-- them into a list of string names
 
+fields :: (GrzAtomKeyClass a, GrzFieldsClass r) => GrzAtomKey a -> r
+fields k = fields' k []
 
+class GrzFieldsClass r where 
+    fields' :: GrzAtomKeyClass a => GrzAtomKey a -> [String] -> r
 
+instance GrzFieldsClass [String] where
+    fields' k ss = (atomKey k : ss)
 
-
-
-
-
-
-
-
-
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+instance (GrzAtomKeyClass a, GrzFieldsClass r) => GrzFieldsClass (GrzAtomKey a -> r) where
+    fields' k ss = (\a -> fields' k (atomKey a : ss))
 
 -- * Gruze object box getters and setters
     

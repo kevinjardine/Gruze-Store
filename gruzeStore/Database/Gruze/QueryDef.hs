@@ -64,10 +64,10 @@ setAggOrderBy [] = id
 
 setOrderByItem ob isAgg =
     case ob of
-        StringAsc s -> setOrderByMetadataItem ob s isAgg
-        StringDesc s -> setOrderByMetadataItem ob s isAgg
-        IntAsc s -> setOrderByMetadataItem ob s isAgg
-        IntDesc s -> setOrderByMetadataItem ob s isAgg
+        StringAsc s -> setOrderByMetadataItem ob (atomKey s) isAgg
+        StringDesc s -> setOrderByMetadataItem ob (atomKey s) isAgg
+        IntAsc s -> setOrderByMetadataItem ob (atomKey s) isAgg
+        IntDesc s -> setOrderByMetadataItem ob (atomKey s) isAgg
         otherwise -> setOrderByOrdinaryItem ob
         
 setOrderByOrdinaryItem ob ((m,n),x) =
@@ -246,12 +246,12 @@ hasAtomOp name op values ((m,n), x) =
     where
         mbit = (show m) ++ "_" ++ (show n)
     
-hasData :: String -> GrzQueryDef -> GrzQueryDef   
+hasData :: GrzAtomKeyClass k => GrzAtomKey k -> GrzQueryDef -> GrzQueryDef   
 hasData name ((m,n), x) =
     ((m,n+1),(GrzQDJoin m ("metadata m" ++ mbit 
         ++ " ON (obj" ++ (show m) ++ ".guid = m" ++ mbit ++ ".objectGuid)")) 
     : (GrzQDWhereFrags m ([GrzQDString ("m" ++ mbit ++ ".nameId = ")] 
-        ++ [GrzQDName name] 
+        ++ [GrzQDName (atomKey name)] 
         ))
     : x)
     where
@@ -271,25 +271,25 @@ hasAtomIn :: String -> [GrzAtom] -> GrzQueryDef -> GrzQueryDef
 hasAtomIn name values = hasAtomOp name "IN" values
 
 class GrzQueryTypeClass qt where
-    hasIn :: GrzKey -> [qt] -> GrzQueryDef -> GrzQueryDef
-    hasBetween :: GrzKey -> (qt,qt) -> GrzQueryDef -> GrzQueryDef
-    hasOp :: GrzKey -> String -> qt -> GrzQueryDef -> GrzQueryDef
+    hasIn :: GrzAtomKey qt -> [qt] -> GrzQueryDef -> GrzQueryDef
+    hasBetween :: GrzAtomKey qt -> (qt,qt) -> GrzQueryDef -> GrzQueryDef
+    hasOp :: GrzAtomKey qt -> String -> qt -> GrzQueryDef -> GrzQueryDef
     
 instance GrzQueryTypeClass GrzString where
-    hasIn name values = hasAtomIn name (map stringToAtom values)
-    hasBetween name (v0,v1) = hasAtomOp name "=><=" (map stringToAtom [v0,v1])
-    hasOp name op value = hasAtomOp name op (map stringToAtom [value])
+    hasIn name values = hasAtomIn (atomKey name) (map stringToAtom values)
+    hasBetween name (v0,v1) = hasAtomOp (atomKey name) "=><=" (map stringToAtom [v0,v1])
+    hasOp name op value = hasAtomOp (atomKey name) op (map stringToAtom [value])
     
 instance GrzQueryTypeClass GrzInt where
-    hasIn name values = hasAtomIn name (map intToAtom values)
-    hasBetween name (v0,v1) = hasAtomOp name "=><=" (map intToAtom [v0,v1]) 
-    hasOp name op value = hasAtomOp name op (map intToAtom [value])
+    hasIn name values = hasAtomIn (atomKey name) (map intToAtom values)
+    hasBetween name (v0,v1) = hasAtomOp (atomKey name) "=><=" (map intToAtom [v0,v1]) 
+    hasOp name op value = hasAtomOp (atomKey name) op (map intToAtom [value])
     
-hasTrue :: String -> GrzQueryDef -> GrzQueryDef
-hasTrue name = hasAtomIn name (map boolToAtom [True])
+hasTrue :: GrzAtomKey Bool -> GrzQueryDef -> GrzQueryDef
+hasTrue name = hasAtomIn (atomKey name) (map boolToAtom [True])
 
-hasFalse :: String -> GrzQueryDef -> GrzQueryDef
-hasFalse name = hasAtomIn name (map boolToAtom [False])
+hasFalse :: GrzAtomKey Bool -> GrzQueryDef -> GrzQueryDef
+hasFalse name = hasAtomIn (atomKey name) (map boolToAtom [False])
 
 withData :: [String] -> GrzQueryDef -> GrzQueryDef
 withData vs ((m,n), x) = foldl' (\((m,n),x) v -> ((m,n+1),(GrzQDNeeds v n):x)) ((m,n),x) vs
@@ -355,7 +355,7 @@ normaliseOp = [("in", "IN"),("In","IN"),("IN","IN"),("iN","IN"),("><","><") , ("
                         
 -- generate the condition bit
 -- TODO: handle other conditions?
--- eg. inclusive between        
+-- eg. exclusive between
 getOpBit :: String -> String -> [GrzAtom] -> String
 getOpBit "IN" var atoms = " ( " ++ var ++ " IN (" ++ (intercalate "," $ map toMark atoms) ++ ")) "
 getOpBit "><" var _ = " ( " ++ var ++ " > ? AND " ++ var ++ " < ? ) "

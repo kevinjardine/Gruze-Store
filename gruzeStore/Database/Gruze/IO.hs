@@ -1,3 +1,4 @@
+{-# LANGUAGE ExistentialQuantification #-}
 module Database.Gruze.IO (
     GrzHandle(..), 
     
@@ -11,6 +12,7 @@ module Database.Gruze.IO (
     -- object IO
     createObj, saveObj, delObj, disableObj, enableObj,
     loadObj, maybeLoadObj, maybeLoadContainer, maybeLoadOwner, maybeLoadSite,
+    noMetadata, allMetadata,
     
     -- object pretty printers    
     ppObj, ppObjFull,
@@ -169,10 +171,10 @@ createObj grzH w p =
   including the specified metadata.
 -}        
 loadObj :: GrzObjClass o => 
-    GrzHandle    -- ^ The data handle 
-    -> o         -- ^ The object to refresh
-    -> [String]  -- ^ The names of the metadata to load
-    -> IO o      -- ^ The returned object
+    GrzHandle       -- ^ The data handle 
+    -> o            -- ^ The object to refresh
+    -> [String]     -- ^ The names of the metadata to load
+    -> IO o         -- ^ The returned object
 loadObj grzH obj needs =
     do
         objs <- getUnwrappedObjs grzH qd needs [] 1 0
@@ -186,8 +188,8 @@ maybeLoadObj :: GrzObjClass o =>
     GrzHandle           -- ^ The data handle
     -> (GrzObj -> o)    -- ^ the wrapper
     -> GrzObj           -- ^ The unwrapped object to load
-    -> [String]         -- ^ The names of the metadata to load
-    -> IO (Maybe o)       -- ^ The returned object
+    -> [String]       -- ^ The names of the metadata to load
+    -> IO (Maybe o)     -- ^ The returned object
 maybeLoadObj grzH w obj needs =
     if isValidObj obj
         then do
@@ -204,7 +206,7 @@ maybeLoadContainer :: (GrzObjClass o, GrzObjClass oc, GrzContainerClass oc) =>
     GrzHandle 
     -> (GrzObj -> oc) 
     -> o 
-    -> [GrzString] 
+    -> [String] 
     -> IO (Maybe oc)
     
 maybeLoadContainer grzH w obj needs = maybeLoadObj grzH w (getContainer obj) needs
@@ -213,7 +215,7 @@ maybeLoadOwner :: (GrzObjClass o, GrzOwnerClass oo) =>
     GrzHandle 
     -> (GrzObj -> oo) 
     -> o 
-    -> [GrzString] 
+    -> [String] 
     -> IO (Maybe oo)
     
 maybeLoadOwner grzH w obj needs = maybeLoadObj grzH w (getOwner obj) needs
@@ -222,7 +224,7 @@ maybeLoadSite :: (GrzObjClass o, GrzSiteClass os) =>
     GrzHandle 
     -> (GrzObj -> os) 
     -> o 
-    -> [GrzString] 
+    -> [String]
     -> IO (Maybe os)
     
 maybeLoadSite grzH w obj needs = maybeLoadObj grzH w (getSite obj) needs
@@ -461,7 +463,16 @@ setSearchable grzH w ns = do
     where
         ot = objWrapperToString (w emptyObj)
         deleteQuery = "DELETE FROM searchable WHERE typeID = ?"
-        insertQuery = "INSERT INTO searchable(typeID, nameID) values (?,?)"        
+        insertQuery = "INSERT INTO searchable(typeID, nameID) values (?,?)"
+    
+noMetadata = []
+allMetadata = ["*"]
+
+-- needsToKeys (NeedsAll) = ["*"]
+-- needsToKeys (NeedsString x) = map atomKey x
+-- needsToKeys (NeedsInt x) = map atomKey x
+-- needsToKeys (NeedsBool x) = map atomKey x   
+-- needsToKeys (NeedsAtom x) = map atomKey x     
 
 -- getOrderBit grzH query orderBy = do
 --     orderList <- mapM (getOrderBy grzH (getHandleDict query)) orderBy'
@@ -475,7 +486,8 @@ setSearchable grzH w ns = do
   unwrapped objects from the database. Provide a limit of 0 to get all objects
   for the query.
 -}        
-getUnwrappedObjs :: GrzHandle           -- ^ data handle
+getUnwrappedObjs ::
+    GrzHandle                           -- ^ data handle
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
     -> [String]                         -- ^ required metadata
     -> [GrzOrderBy]                     -- ^ order by
@@ -584,7 +596,7 @@ getObjsAggByObjCount :: (GrzObjClass o1, GrzObjClass o2) =>
     -> (GrzObj -> o1)                    -- ^ wrapper for type to be aggregated
     -> (GrzObj -> o2)                    -- ^ wrapper for result type
     -> (GrzQueryDef -> GrzQueryDef)      -- ^ query definition
-    -> [String]                         -- ^ required metadata
+    -> [String]                          -- ^ required metadata
     -> [GrzOrderBy]                      -- ^ order by
     -> Int                               -- ^ limit (number of objects to return)
     -> Int                               -- ^ offset
@@ -606,24 +618,24 @@ getObjsAggByObjCount grzH w1 w2 queryDefs needs orderBy limit offset =
   name and two types. It retrieves a list of objects with an aggregated sum 
   (of the metadata value) and count associated with each.
 -}        
-getObjsAggByObjSumCount :: (GrzObjClass o1, GrzObjClass o2) =>
+getObjsAggByObjSumCount :: (GrzObjClass o1, GrzObjClass o2, GrzAtomKeyClass k) =>
     GrzHandle                            -- ^ data handle
-    -> String                            -- ^ metadata name attached to values being aggregated
     -> (GrzObj -> o1)                    -- ^ wrapper for type to be aggregated
     -> (GrzObj -> o2)                    -- ^ wrapper for result type
     -> (GrzQueryDef -> GrzQueryDef)      -- ^ query definition
+    -> GrzAtomKey k                      -- ^ metadata name attached to values being aggregated
     -> [String]                          -- ^ required metadata
     -> [GrzOrderBy]                      -- ^ order by
     -> Int                               -- ^ limit (number of objects to return)
     -> Int                               -- ^ offset
     -> IO [(o2, (Int,Int))]              -- ^ (object, count) pair
-getObjsAggByObjSumCount grzH name w1 w2 queryDefs needs orderBy limit offset =
+getObjsAggByObjSumCount grzH w1 w2 queryDefs name needs orderBy limit offset =
     do
         t2 <- maybeGetStringHandle grzH (objWrapperToString (w2 emptyObj))
         case t2 of
             Nothing -> return []
             Just (_,i2) -> do
-                mn <- maybeGetStringHandle grzH name
+                mn <- maybeGetStringHandle grzH (atomKey name)
                 case mn of
                     Nothing -> return []
                     Just (_,n) -> do
@@ -638,10 +650,11 @@ getObjsAggByObjSumCount grzH name w1 w2 queryDefs needs orderBy limit offset =
   It retrieves a tuple (sum, count) of objects from the database that have 
   metadata integer values with that name.
 -}        
-getObjSumCount :: GrzHandle         -- ^ data handle
+getObjSumCount :: GrzAtomKeyClass k =>
+    GrzHandle                          -- ^ data handle
     -> (GrzQueryDef -> GrzQueryDef)    -- ^ query definition
-    -> GrzString                       -- ^ metadata name 
-    -> IO (Int, Int)                   -- ^ count of objects
+    -> GrzAtomKey k                    -- ^ metadata name 
+    -> IO (Int, Int)                   -- ^ sum and count of objects
 getObjSumCount grzH queryDefs name =
     do
         query <- grzCreateQuery grzH (queryDefs . (setQueryType GrzQTAggSumCount) . (hasData name))

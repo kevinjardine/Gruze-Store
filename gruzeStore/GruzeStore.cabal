@@ -1,7 +1,22 @@
 name:               gruze
 version:            0.1
-synopsis:           Object store
-description:        Inspired by Elgg (http://elgg.org).
+synopsis:           Object store and querying library
+description: {
+Gruze is a persistent object store and querying library written in Haskell.
+It is intended for use with applications that require flexible and
+over-rideable data models (for example a web application with a plugin
+architecture that allows adding new features and data to existing
+functionality).
+.
+This is currently beta quality code tested with Sqlite3, MySQL (both native and
+ODBC drivers) and PostgreSQL
+.
+An example model (blogging with multiple user roles) can be found in gruzeTest.
+.
+An overview document (PDF format) can be found here:
+.
+<http://github.com/downloads/kevinjardine/Gruze-Store/gruzeoverview.pdf>
+}
 category:           Data
 license:            GPL
 license-file:       LICENSE

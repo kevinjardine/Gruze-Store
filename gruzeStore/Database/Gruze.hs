@@ -5,15 +5,20 @@ module Database.Gruze (
     -- first the atom, box and object constructors, getters and setters
     
     -- constructors (note that the internals of GrzObj are not exported)
-    GrzObj, GrzBox(..), GrzRel(..),
+
+    GrzAtomKey(..), GrzObj, GrzBox(..), GrzRel(..),
     
     -- classes
     
+    GrzAtomKeyClass(..),
+    
     GrzObjClass(..), GrzContainerClass(..), GrzOwnerClass(..), GrzSiteClass(..),
-    GrzAtomBoxClass(..), 
+    GrzAtomBoxClass(..),
     
     -- types
-    GrzAtom, GrzAtomBox, GrzObjBox, GrzInt, GrzString, GrzKey, GrzLogLevel(..),
+    GrzAtom, GrzAtomBox, 
+    GrzAtomIntKey, GrzAtomStringKey, GrzAtomBoolKey, GrzAtomAtomKey,
+    GrzObjBox, GrzInt, GrzString, GrzKey, GrzLogLevel(..),
     GrzDatabaseType(..),
 
     -- atom converters
@@ -42,24 +47,8 @@ module Database.Gruze (
     
     -- for atoms
     
-    setAtom, addAtom, setAtomList, addAtomList, addAtomPair, addAtomPairs, 
-    getAtom, getAtomList, maybeGetAtom, maybeGetAtomList, removeFromAtomBox,
-    getKeysFromAtomBox,
-    
-    -- for strings
-    
-    setString, addString, setStringList, addStringList, getString, 
-    maybeGetString, getStringList, maybeGetStringList,
-    
-    -- for ints
-    
-    setInt, addInt, setIntList, addIntList, getInt, 
-    maybeGetInt, getIntList, maybeGetIntList,
-    
-    -- for bools
-    
-    setBool, addBool, setBoolList, addBoolList, getBool, 
-    maybeGetBool, getBoolList, maybeGetBoolList,
+    addAtomPair, addAtomPairs, removeFromAtomBox, getKeysFromAtomBox,
+    fields,
     
     -- object box functions 
 
@@ -85,7 +74,6 @@ module Database.Gruze (
     -- by enabled/disabled
     hasEnabled, hasDisabled,
     
-    -- by the fixed relationships
     -- by the fixed relationships
     withOwner, withContainer, withSite,
     withOwners, withContainers, withSites,
@@ -113,11 +101,11 @@ module Database.Gruze (
     -- query functions
     getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
     getObjCount, getObjSumCount, getObjsAggByObjCount, getObjsAggByObjSumCount, 
-    setSearchable,
+    setSearchable, noMetadata, allMetadata,
     
     -- create, save, delete, disable, enable and load
     createObj, saveObj, delObj, disableObj, enableObj,
-    loadObj, maybeLoadObj, maybeLoadContainer, maybeLoadOwner, maybeLoadSite,
+    loadObj, maybeLoadObj, maybeLoadContainer, maybeLoadOwner, maybeLoadSite,    
 
     -- file handler
     createFileAtom, maybeGetFileMetadata, maybeGetFileContent, maybeGetFileThumb,

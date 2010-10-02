@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Database.Gruze.Types where
 
 import qualified Data.Map as Map
@@ -77,6 +78,28 @@ instance GrzAtomBoxClass GrzAtomBox where
     getAtomBox c = c
     putAtomBox b _ = b
     
+-- * Gruze atom box key definitions
+
+data GrzAtomKey a = GrzAtomKey { 
+    atomKey :: String
+}
+    deriving (Eq, Show)
+
+class GrzAtomKeyClass t where
+    set :: GrzAtomBoxClass b => GrzAtomKey t -> t -> b -> b
+    add :: GrzAtomBoxClass b => GrzAtomKey t -> t -> b -> b
+    get :: GrzAtomBoxClass b => GrzAtomKey t -> t -> b -> t
+    maybeGet :: GrzAtomBoxClass b => GrzAtomKey t -> b -> Maybe t
+    setList :: GrzAtomBoxClass b => GrzAtomKey t -> [t] -> b -> b
+    addList :: GrzAtomBoxClass b => GrzAtomKey t -> [t] -> b -> b
+    getList :: GrzAtomBoxClass b => GrzAtomKey t -> [t] -> b -> [t]
+    maybeGetList :: GrzAtomBoxClass b => GrzAtomKey t -> b -> Maybe [t]
+
+type GrzAtomIntKey = GrzAtomKey Int
+type GrzAtomStringKey = GrzAtomKey String
+type GrzAtomBoolKey = GrzAtomKey Bool
+type GrzAtomAtomKey = GrzAtomKey GrzAtom
+   
 -- * Gruze object definition
     
 data GrzObj = GrzObjID GrzInt |
@@ -138,8 +161,8 @@ data GrzRef =  ObjRef | ContainerRef | OwnerRef | SiteRef
     deriving Eq
     
 data GrzOrderBy = GuidAsc | GuidDesc | TimeCreatedAsc | TimeCreatedDesc
-        | TimeUpdatedAsc | TimeUpdatedDesc | StringAsc String | StringDesc String
-        | IntAsc String | IntDesc String
+        | TimeUpdatedAsc | TimeUpdatedDesc | StringAsc (GrzAtomKey String) | StringDesc (GrzAtomKey String)
+        | IntAsc (GrzAtomKey Int) | IntDesc (GrzAtomKey Int)
         | CountAsc | CountDesc | SumAsc | SumDesc        
 -- TODO: add | AvgAsc | AvgDesc
     deriving (Eq,Show)
