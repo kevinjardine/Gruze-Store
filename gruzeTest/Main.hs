@@ -8,7 +8,7 @@ import Database.Gruze.Connection.Sqlite3
 
 import qualified Data.ByteString as BS
 
-#include "Def.cpp"
+#include "GrzDefs.cpp"
 
 default (Int)
 
@@ -38,6 +38,17 @@ defObj(Rating)
 defRel(hasPermView)
 defRel(hasRole)
 
+-- fields
+defField(ratingValue,Int)
+defField(title,String)
+defField(body,String)
+defField(subtype,String)
+defField(description,String)
+defField(tags,String)
+defField(name,String)
+defField(email,String)
+defField(image,Atom)
+
 {-|
       This example application allows teachers to post to a special blog visible only to
       teachers and not students. Gruze does not provide one standard access control system
@@ -54,101 +65,101 @@ main = do
     
     let configSqlite3 =
             -- the location of the Sqlite3 file for the Gruze database 
-            (setString "grzDBFile" "d:/testdb")
+            (set dBFile "d:/testdb")
         
             -- location of data directory on file system (must be writable by Haskell)
-            . (setString "grzDataDirectory" "D:/projects/haskell/storedata")
+            . (set dataDirectory "D:/projects/haskell/storedata")
             
             -- location of log file on file system (must be writable by Haskell)
             -- at debug level (used in the example code below), Gruze logs a lot of 
             -- information (generated queries, object creation notices etc.)
-            . (setString "grzLogFile" "D:/projects/haskell/newlog2.txt")
+            . (set logFile "D:/projects/haskell/newlog2.txt")
             
             -- location of Imagemagick convert executable on file system
-            . (setString "grzConvertLocation" "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
+            . (set convertLocation "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
             
 --     let configMySQL =
 --             
 --             -- db server location (usually localhost)
---             (setString "grzDBServer" "localhost")
+--             (set dBServer "localhost")
 --             
 --             -- database name
---             . (setString "grzDBDatabase" "gruze")
+--             . (set dBDatabase "gruze")
 --             
 --             -- database user name
---             . (setString "grzDBUID" "root")
+--             . (set dBUID "root")
 --             
 --             -- database password
---             . (setString "grzDBPassword" "")
+--             . (set dBPassword "")
 --             
 --             -- location of data directory on file system (must be writable by Haskell)
---             . (setString "grzDataDirectory" "/root/gruzedata")
+--             . (set dataDirectory "/root/gruzedata")
 --             
 --             -- location of log file on file system (must be writable by Haskell)
 --             -- at debug level (used in the example code below), Gruze logs a lot of 
 --             -- information (generated queries, object creation notices etc.)
---             . (setString "grzLogFile" "/root/gruzelog.txt")
+--             . (set logFile "/root/gruzelog.txt")
 --             
 --             -- location of Imagemagick convert executable on file system
---             . (setString "grzConvertLocation" "/usr/bin/convert")
+--             . (set convertLocation "/usr/bin/convert")
 --             
 --             -- socket used by MySQL on Unix-like systems
---             . (setString "grzDBSocket" "/var/lib/mysql/mysql.sock")
+--             . (set dBSocket "/var/lib/mysql/mysql.sock")
 
      
 --     let configODBC =
 --             -- the ODBC driver string 
---             (setString "grzDBDriver" "{MySQL ODBC 3.51 Driver}")
+--             (set dBDriver "{MySQL ODBC 3.51 Driver}")
 --             
 --             -- db server location (usually localhost)
---             . (setString "grzDBServer" "localhost")
+--             . (set dBServer "localhost")
 --             
 --             -- database name
---             . (setString "grzDBDatabase" "gruze2")
+--             . (set dBDatabase "gruze2")
 --             
 --             -- database user name
---             . (setString "grzDBUID" "gruze")
+--             . (set dBUID "gruze")
 --             
 --             -- database password
---             . (setString "grzDBPassword" "gtest")
+--             . (set dBPassword "gtest")
 --             
 --             -- location of data directory on file system (must be writable by Haskell)
---             . (setString "grzDataDirectory" "D:/projects/haskell/storedata")
+--             . (set dataDirectory "D:/projects/haskell/storedata")
 --             
 --             -- location of log file on file system (must be writable by Haskell)
 --             -- at debug level (used in the example code below), Gruze logs a lot of 
 --             -- information (generated queries, object creation notices etc.)
---             . (setString "grzLogFile" "D:/projects/haskell/newlog2.txt")
+--             . (set logFile "D:/projects/haskell/newlog2.txt")
 --             
 --             -- location of Imagemagick convert executable on file system
---             . (setString "grzConvertLocation" "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
+--             . (set convertLocation "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
 
 --     let configPostgreSQL =
 --             -- the PostgreSQL port 
---             (setString "grzDBPort" "5432")
+--             (set dBPort "5432")
 --             
 --             -- db server location (usually localhost)
---             . (setString "grzDBServer" "localhost")
+--             . (set dBServer "localhost")
 --             
 --             -- database name
---             . (setString "grzDBDatabase" "gruze")
+--             . (set dBDatabase "gruze")
 --             
 --             -- database user name
---             . (setString "grzDBUID" "gruze")
+--             . (set dBUID "gruze")
 --             
 --             -- database password
---             . (setString "grzDBPassword" "")
+--             . (set dBPassword "")
 --             
 --             -- location of data directory on file system (must be writable by Haskell)
---             . (setString "grzDataDirectory" "D:/projects/haskell/storedata")
+--             . (set dataDirectory "D:/projects/haskell/storedata")
 --             
 --             -- location of log file on file system (must be writable by Haskell)
 --             -- at debug level (used in the example code below), Gruze logs a lot of 
 --             -- information (generated queries, object creation notices etc.)
---             . (setString "grzLogFile" "D:/projects/haskell/newlog2.txt")
+--             . (set logFile "D:/projects/haskell/newlog2.txt")
 --             
 --             -- location of Imagemagick convert executable on file system
---             . (setString "grzConvertLocation" "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
+--             . (set convertLocation "D:/Program Files/imagemagick-6.3.5-q8/convert.exe")
                 
     -- get handle (which opens the database connection)
     
@@ -158,7 +169,7 @@ main = do
     grzH' <- getHandle configSqlite3
        
     -- delete any previous test temporary workspaces (and all their content)
-    let testSitesQd = hasIn "subtype" ["grzTest"]
+    let testSitesQd = hasIn subtype ["grzTest"]
     testSites <- getBareObjs grzH' TemporaryWorkspace testSitesQd [] 0 0
     mapM_ (delObj grzH') testSites
     
@@ -178,9 +189,9 @@ main = do
                $ grzH'
                  
     -- make some fields searchable
-    setSearchable grzH BlogPost ["title","body","tags"]
-    setSearchable grzH Blog ["title"]
-    setSearchable grzH Comment ["body"]
+    setSearchable grzH BlogPost (fields title body tags)
+    setSearchable grzH Blog (fields title)
+    setSearchable grzH Comment (fields body)
     
     -- create roles for teachers and students
     teacherRole <- createRole grzH
@@ -250,9 +261,9 @@ main = do
     -- The example changes the title and description and adds an image.
     
     let edits = 
-            (setString "title" "My first blog post (edited)")
-            . (setString "body" "Testing the object store.")
-            . (setAtom "image" fa)
+            (set title "My first blog post (edited)")
+            . (set body "Testing the object store.")
+            . (set image fa)
     
     -- Apply edits to original post and save. 
     johnPost <- saveObj grzH (edits post)
@@ -262,7 +273,7 @@ main = do
     
     -- Load and display the owner object including the name field.
     -- Not all objects have owners so this is a maybe.
-    postOwner <- maybeLoadOwner grzH User johnPost ["name"]
+    postOwner <- maybeLoadOwner grzH User johnPost (fields name)
     
     putStrLn $ "Blog post owner: " ++ (fromMaybe "" $ fmap ppObjFull postOwner)              
     
@@ -283,7 +294,7 @@ main = do
     let ccqd =  (hasRel hasContainer FwdRel) 
                 . (hasRel hasContainer FwdRel) 
                 . (withObj janeComment)
-    rc <- getObjs grzH Blog ccqd ["title"] [] 0 0
+    rc <- getObjs grzH Blog ccqd (fields title) [] 0 0
     mapM (putStrLn . ppObjFull) rc
     
     -- Wendy the teacher posts in the teacher blog
@@ -311,11 +322,13 @@ main = do
     -- first).
     
     putStrLn "\nAll high ratings of John's blog post:" 
-    let ccqd =  (hasOp "value" ">=" 4)
+    let ccqd =  (hasOp ratingValue ">=" 4)
                 . (hasRel hasContainer InvRel) 
                 . (withObj johnPost)
-    rc <- getObjs grzH Rating ccqd ["value"] [] 0 0
+    rc <- getObjs grzH Rating ccqd (fields ratingValue) [] 0 0
     mapM (putStrLn . ppObjFull) rc
+    
+    putStrLn $ "rating: " ++ (show $ (maybeGet ratingValue (head rc)))
    
     -- examples of overall aggregation (which returns a count or a (sum,count)
     -- pair rather than an object list)
@@ -328,12 +341,12 @@ main = do
         . (withSite (grzDefaultSite grzH))
         . (withContainer post))
     
-    -- get the sum and count of the value field of the relevant Ratings        
+    -- get the sum and count of the ratingValue field of the relevant Ratings        
     r <- getObjSumCount grzH
         ((hasType Rating)
         . (withSite (grzDefaultSite grzH))
         . (withContainer post))
-        "value"
+        ratingValue
     
     let avgRating = if (snd r) == 0 
                         then 
@@ -355,7 +368,7 @@ main = do
     
     -- In this example, we are listing all blog posts with a count of the 
     -- comments and then queries with a sum and count of the all ratings
-    -- for each post, and then just the high ratings (value >= 4) for
+    -- for each post, and then just the high ratings (ratingValue >= 4) for
     -- all blog posts inside blogs inside the teacher collection.
     
     -- The Gruze query system takes special care to deal with the case where
@@ -380,9 +393,9 @@ main = do
             
     putStrLn $ "\nPer object aggregation example \n(object, sum and count of all ratings per blog post): "
     
-    rabosc <- getObjsAggByObjSumCount grzH "value" Rating BlogPost
+    rabosc <- getObjsAggByObjSumCount grzH  Rating BlogPost
                 ((hasRel hasContainer InvRel) . (withSite (grzDefaultSite grzH)))
-                [] [SumAsc] 0 0
+                ratingValue noMetadata [SumAsc] 0 0
             
     putStrLn $ concatMap (\(o,(s,c)) -> 
                 ("(" ++ (ppObj o) ++ ",(" ++ (show s) ++ "," ++ (show c) ++ "))\n")
@@ -390,23 +403,23 @@ main = do
             
     -- This is a more complex example aggregating high value ratings for blog
     -- posts that are contained in blogs inside the teacher collection.
-    -- Notice that we are using the "*" feature to retrieve all available
+    -- Notice that we are using the allMetadata option to retrieve all available
     -- metadata for the returned objects, and aggregating only on blog posts
     -- that have a defined "tags" field.
     
     putStrLn $ "\nPer object aggregation example \n"
                 ++ "(object, sum and count of high ratings per teacher blog post): "
     
-    rabosc2 <- getObjsAggByObjSumCount grzH "value" Rating BlogPost
-                (   (hasOp "value" ">=" 4)
+    rabosc2 <- getObjsAggByObjSumCount grzH Rating BlogPost
+                (   (hasOp ratingValue ">=" 4)
                     . (hasRel hasContainer InvRel)
-                    . (hasData "tags") 
+                    . (hasData tags) 
                     . (hasRel hasContainer InvRel)
                     . (hasType Blog)
                     . (hasRel hasContainer InvRel)
                     . (withObj teacherCollection)
                 )
-                ["*"] [] 0 0
+                ratingValue allMetadata [] 0 0
             
     putStrLn $ concatMap (\(o,(s,c)) -> 
                 ("(" ++ (ppObjFull o) ++ ",(" ++ (show s) ++ "," ++ (show c) ++ "))\n")
@@ -433,46 +446,46 @@ newtype File = File GrzAtom
 -- object creation and accessor functions
 
 createTemporaryWorkspace :: GrzHandle -> String -> String -> String -> IO TemporaryWorkspace
-createTemporaryWorkspace grzH subType title description =
+createTemporaryWorkspace grzH workspaceSubtype workspaceTitle workspaceDescription =
     createObj grzH TemporaryWorkspace od
     where
         od =
-            (setString "subtype" subType)
-            . (setString "title" title)
-            . (setString "description" title)
+            (set subtype workspaceSubtype)
+            . (set title workspaceTitle)
+            . (set description workspaceTitle)
 
 -- create a user and optionally add the user to roles    
 createUser :: GrzHandle -> String -> String -> [Role] -> IO User
-createUser grzH name email roles = do
+createUser grzH userName userEmail roles = do
     user <- createObj grzH User od
     mapM_ (addUserToRole grzH user) roles
     return user
     where
         od =
             (setSite (grzDefaultSite grzH))
-            . (setString "name" name)
-            . (setString "email" email)
+            . (set name userName)
+            . (set email userEmail)
    
 createBlog :: GrzHandle -> Collection -> String -> IO Blog
-createBlog grzH c title =
+createBlog grzH c blogTitle =
     createObj grzH Blog od
     where
         od =
             (setSite (grzDefaultSite grzH))
             . (setContainer c)
-            . (setString "title" title)
+            . (set title blogTitle)
                 
 createCollection :: GrzHandle -> String -> IO Collection
-createCollection grzH title = 
+createCollection grzH collectionTitle = 
     createObj grzH Collection od
     where
         od =
             (setSite (grzDefaultSite grzH))
-            . (setString "title" title)
+            . (set title collectionTitle)
 
 -- posts to the blog and sets the permission to the specified role
 postBlog :: GrzHandle -> Blog -> User -> Role -> String -> String -> [String] -> Maybe File -> IO BlogPost
-postBlog grzH blog user role title body tags image = do
+postBlog grzH blog user role postTitle postBody postTags postImage = do
     bp <- createObj grzH BlogPost od
     grantViewPermission grzH bp role
     return bp
@@ -481,11 +494,11 @@ postBlog grzH blog user role title body tags image = do
             (setSite (grzDefaultSite grzH))
             . (setOwner user)
             . (setContainer blog)
-            . (setString "title" title)
-            . (setString "body" body)
-            . (setStringList "tags" tags)
-            . case image of
-                Just (File im) -> setAtom "image" im
+            . (set title postTitle)
+            . (set body postBody)
+            . (setList tags postTags)
+            . case postImage of
+                Just (File im) -> set image im
                 otherwise -> id
                     
 -- comments on a blog post and sets the permission to the specified role
@@ -499,7 +512,7 @@ commentOnBlogPost grzH post commenter role comment = do
             (setSite (grzDefaultSite grzH))
             . (setOwner commenter)
             . (setContainer post)
-            . (setString "body" comment)
+            . (set body comment)
                 
 -- rates a blog post
 rateBlogPost :: GrzHandle -> BlogPost -> User -> Int -> IO ()
@@ -511,7 +524,7 @@ rateBlogPost grzH post rater rating = do
             (setSite (grzDefaultSite grzH))
             . (setOwner rater)
             . (setContainer post)
-            . (setInt "value" rating)
+            . (set ratingValue rating)
             
 -- An example generic search function
 -- Searches for enabled content that the given user has permission to see.
@@ -532,13 +545,13 @@ searchForContent grzH user s = do
 -- permissions (eg. "view") are granted to each role
                 
 createRole :: GrzHandle -> String -> String -> IO Role
-createRole grzH title description = 
+createRole grzH roleTitle roleDescription = 
     createObj grzH Role od
     where
         od =
             (setSite (grzDefaultSite grzH))
-            . (setString "title" title)
-            . (setString "description" description)
+            . (set title roleTitle)
+            . (set description roleDescription)
                                
 addUserToRole :: GrzHandle -> User -> Role -> IO ()
 addUserToRole grzH user role =

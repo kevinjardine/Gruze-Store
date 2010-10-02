@@ -1,6 +1,7 @@
 module Database.Gruze.Connection.PostgreSQL (
 
-getHandle
+getHandle, dataDirectory, logFile, convertLocation, dBServer, dBDatabase, 
+dBUID, dBPassword, dBPort
 
 ) where
 
@@ -9,17 +10,27 @@ import Database.Gruze
 import Database.HDBC
 import Database.HDBC.PostgreSQL
 
+dataDirectory = GrzAtomKey { atomKey = "dataDirectory" } :: GrzAtomStringKey
+logFile = GrzAtomKey { atomKey = "logFile" } :: GrzAtomStringKey
+convertLocation = GrzAtomKey { atomKey = "convertLocation" } :: GrzAtomStringKey
+dBServer = GrzAtomKey { atomKey = "dBServer" } :: GrzAtomStringKey
+dBDatabase = GrzAtomKey { atomKey = "dBDatabase" } :: GrzAtomStringKey
+dBUID = GrzAtomKey { atomKey = "dBUID" } :: GrzAtomStringKey
+dBPassword = GrzAtomKey { atomKey = "dBPassword" } :: GrzAtomStringKey
+dBPort = GrzAtomKey { atomKey = "dBPort" } :: GrzAtomStringKey
+
 -- gets the handle
 getHandle :: (GrzAtomBox -> GrzAtomBox)
     -> IO GrzHandle   
 getHandle c = do
     dbc <- getDatabaseConnection config
-    return $ GrzHandle dbc dataDir convertLoc logFile defaultSite thumbDefs logLevel GrzPostgreSQLDB        
+    return $ GrzHandle dbc 
+        (get dataDirectory "" config) 
+        (get convertLocation "" config) 
+        (get logFile "" config) 
+        defaultSite thumbDefs logLevel GrzPostgreSQLDB        
     where
         config = c emptyAtomBox
-        dataDir = getString "grzDataDirectory" "" config
-        convertLoc = getString "grzConvertLocation" "" config
-        logFile = getString "grzLogFile" "" config
         defaultSite = emptyBareObj
         thumbDefs = []
         logLevel = WarningLogLevel
@@ -32,15 +43,15 @@ getDatabaseConnection config = do
     return dbc    
     where
         connectionString = "user='"
-            ++ (getString "grzDBUID" "" config)
+            ++ (get dBUID "" config)
             ++ "' password='"
-            ++ (getString "grzDBPassword" "" config)
+            ++ (get dBPassword "" config)
             ++ "' "
             ++ "port=" 
-            ++ (getString "grzDBPort" "" config)
+            ++ (get dBPort "" config)
             ++ " host="
-            ++ (getString "grzDBServer" "" config)
+            ++ (get dBServer "" config)
             ++ " dbname='"
-            ++ (getString "grzDBDatabase" "" config)
+            ++ (get dBDatabase "" config)
             ++ "'"
     

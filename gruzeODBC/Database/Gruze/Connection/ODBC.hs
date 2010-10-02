@@ -1,6 +1,8 @@
 module Database.Gruze.Connection.ODBC (
 
-getHandle, getMySQLHandle, getPostgreSQLHandle
+getHandle, getMySQLHandle, getPostgreSQLHandle,
+dataDirectory, logFile, convertLocation, dBDriver, dBServer, dBDatabase, 
+dBUID, dBPassword
 
 ) where
 
@@ -9,18 +11,28 @@ import Database.Gruze
 import Database.HDBC
 import Database.HDBC.ODBC
 
+dataDirectory = GrzAtomKey { atomKey = "dataDirectory" } :: GrzAtomStringKey
+logFile = GrzAtomKey { atomKey = "logFile" } :: GrzAtomStringKey
+convertLocation = GrzAtomKey { atomKey = "convertLocation" } :: GrzAtomStringKey
+dBDriver = GrzAtomKey { atomKey = "dBDriver" } :: GrzAtomStringKey
+dBServer = GrzAtomKey { atomKey = "dBServer" } :: GrzAtomStringKey
+dBDatabase = GrzAtomKey { atomKey = "dBDatabase" } :: GrzAtomStringKey
+dBUID = GrzAtomKey { atomKey = "dBUID" } :: GrzAtomStringKey
+dBPassword = GrzAtomKey { atomKey = "dBPassword" } :: GrzAtomStringKey
+
 -- gets the handle
 getGenericHandle :: (GrzAtomBox -> GrzAtomBox)
     -> GrzDatabaseType
     -> IO GrzHandle   
 getGenericHandle c db = do
     dbc <- getDatabaseConnection config
-    return $ GrzHandle dbc dataDir convertLoc logFile defaultSite thumbDefs logLevel db        
+    return $ GrzHandle dbc 
+        (get dataDirectory "" config) 
+        (get convertLocation "" config) 
+        (get logFile "" config) 
+        defaultSite thumbDefs logLevel db        
     where
         config = c emptyAtomBox
-        dataDir = getString "grzDataDirectory" "" config
-        convertLoc = getString "grzConvertLocation" "" config
-        logFile = getString "grzLogFile" "" config
         defaultSite = emptyBareObj
         thumbDefs = []
         logLevel = WarningLogLevel
@@ -34,14 +46,14 @@ getHandle = getMySQLHandle
 getDatabaseConnection :: GrzAtomBox -> IO Connection
 getDatabaseConnection config = do
     dbc <- connectODBC ("DRIVER=" 
-            ++ (getString "grzDBDriver" "" config)
+            ++ (get dBDriver "" config)
             ++ "; SERVER="
-            ++ (getString "grzDBServer" "" config)
+            ++ (get dBServer "" config)
             ++ "; DATABASE="
-            ++ (getString "grzDBDatabase" "" config)
+            ++ (get dBDatabase "" config)
             ++ "; UID="
-            ++ (getString "grzDBUID" "" config)
+            ++ (get dBUID "" config)
             ++ "; PASSWORD="
-            ++ (getString "grzDBPassword" "" config)
+            ++ (get dBPassword "" config)
             ++ ";")
     return dbc
