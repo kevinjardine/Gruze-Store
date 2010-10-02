@@ -11,7 +11,7 @@ An example model (blogging with multiple user roles) can be found in gruzeTest.
 
 An overview document (PDF format) can be found here:
 
-http://github.com/downloads/kevinjardine/Gruze-Store/gruzeoverview.pdf
+http://github.com/downloads/kevinjardine/Gruze-Store/
 
 This overview is intended for developers with only basic Haskell experience
 but parts of it (especially the section on the querying functions) may be of
