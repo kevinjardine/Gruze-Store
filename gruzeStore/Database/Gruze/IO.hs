@@ -12,10 +12,6 @@ module Database.Gruze.IO (
     -- object IO
     createObj, saveObj, delObj, disableObj, enableObj,
     loadObj, maybeLoadObj, maybeLoadContainer, maybeLoadOwner, maybeLoadSite,
-    noMetadata, allMetadata,
-    
-    -- object pretty printers    
-    ppObj, ppObjFull,
 
     -- file handler
     createFileAtom, maybeGetFileMetadata, maybeGetFileContent, maybeGetFileThumb,
@@ -47,7 +43,6 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.Typeable
 
-import System.Locale (defaultTimeLocale)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 
@@ -73,16 +68,27 @@ getHandleDict _ = []
 -- the Object IO functions
 
 -- handle functions
-        
-setDefaultSite :: GrzSiteClass os => os -> GrzHandle -> GrzHandle
+-- | Set default site in handle.    
+setDefaultSite :: GrzSiteClass os => 
+    os              -- ^ site
+    -> GrzHandle    -- ^ current handle
+    -> GrzHandle    -- ^ new handle
 setDefaultSite site grzH  =               
     grzH {grzDefaultSite = unwrapObj site}
-    
-setThumbDefs :: [(String,String)] -> GrzHandle -> GrzHandle
+
+-- | Configure image thumbnail settings.    
+setThumbDefs :: 
+    [(String,String)]   -- ^ list of (size,param) pairs
+    -> GrzHandle        -- ^ current handle
+    -> GrzHandle        -- ^ new handle
 setThumbDefs td grzH =               
     grzH {grzThumbDefs = td}
-    
-setLogLevel :: GrzLogLevel -> GrzHandle -> GrzHandle
+
+-- | Set Gruze logging level.      
+setLogLevel ::
+    GrzLogLevel     -- ^ log level
+    -> GrzHandle    -- ^ current handle
+    -> GrzHandle    -- ^ new handle
 setLogLevel level grzH =               
     grzH {grzLogLevel = level}
         
@@ -129,10 +135,14 @@ grzSetMetadataArray _ _ [] = return 0
 
 -- higher level object functions
 
--- takes a type constructor and some setters
--- and saves the object to the datebase, returning the new wrapped object
-
-createObj :: (Typeable o, GrzObjClass o) => GrzHandle -> (GrzObj -> o) -> (GrzObj -> GrzObj) -> IO o
+{-| Takes a type constructor and a setter function
+    and saves the object to the datebase, returning the new wrapped object.
+-} 
+createObj :: (Typeable o, GrzObjClass o) => 
+    GrzHandle               -- ^ data handle
+    -> (GrzObj -> o)        -- ^ type wrapper
+    -> (GrzObj -> GrzObj)   -- ^ setter functions
+    -> IO o                 -- ^ new object
 createObj grzH w p =
     if null t then 
         return (w emptyObj)
@@ -167,13 +177,13 @@ createObj grzH w p =
         query = "INSERT INTO objects(objectType,ownerGuid,containerGuid,siteGuid,timeCreated,timeUpdated,enabled) values(?,?,?,?,?,?,?)"         
 
 {-|
-  The 'loadObj' function loads the current data for an object from the database,
+  Loads the current data for an object from the database,
   including the specified metadata.
 -}        
 loadObj :: GrzObjClass o => 
-    GrzHandle       -- ^ The data handle 
-    -> o            -- ^ The object to refresh
-    -> [String]     -- ^ The names of the metadata to load
+    GrzHandle       -- ^ data handle 
+    -> o            -- ^ object to refresh
+    -> [String]     -- ^ metadata names needed (use fields function to provide this in a typesafe way)
     -> IO o         -- ^ The returned object
 loadObj grzH obj needs =
     do
@@ -183,12 +193,13 @@ loadObj grzH obj needs =
                     a  -> replaceObj obj (head a)
     where
         qd = (withObjs [obj])
-        
+
+-- | Reloads an unwrapped object as a wrapped one.     
 maybeLoadObj :: GrzObjClass o => 
-    GrzHandle           -- ^ The data handle
-    -> (GrzObj -> o)    -- ^ the wrapper
+    GrzHandle           -- ^ data handle
+    -> (GrzObj -> o)    -- ^ type wrapper
     -> GrzObj           -- ^ The unwrapped object to load
-    -> [String]       -- ^ The names of the metadata to load
+    -> [String]         -- ^ metadata names needed (use fields function to provide this in a typesafe way)
     -> IO (Maybe o)     -- ^ The returned object
 maybeLoadObj grzH w obj needs =
     if isValidObj obj
@@ -202,35 +213,42 @@ maybeLoadObj grzH w obj needs =
         else
             return Nothing
 
+-- | Loads the container for the given object if it exists.
 maybeLoadContainer :: (GrzObjClass o, GrzObjClass oc, GrzContainerClass oc) => 
-    GrzHandle 
-    -> (GrzObj -> oc) 
-    -> o 
-    -> [String] 
-    -> IO (Maybe oc)
+    GrzHandle           -- ^ data handle
+    -> (GrzObj -> oc)   -- ^ expected type wrapper for container
+    -> o                -- ^ object which we are returning the container for
+    -> [String]         -- ^ metadata names needed (use fields function to provide this in a typesafe way)
+    -> IO (Maybe oc)    -- ^ maybe returns the container
     
 maybeLoadContainer grzH w obj needs = maybeLoadObj grzH w (getContainer obj) needs
 
+-- | Loads the owner for the given object if it exists.
 maybeLoadOwner :: (GrzObjClass o, GrzOwnerClass oo) => 
-    GrzHandle 
-    -> (GrzObj -> oo) 
-    -> o 
-    -> [String] 
-    -> IO (Maybe oo)
+    GrzHandle           -- ^ data handle
+    -> (GrzObj -> oo)   -- ^ expected type wrapper for owner
+    -> o                -- ^ object which we are returning the owner for
+    -> [String]         -- ^ metadata names needed (use fields function to provide this in a typesafe way)
+    -> IO (Maybe oo)    -- ^ maybe returns the owner
     
 maybeLoadOwner grzH w obj needs = maybeLoadObj grzH w (getOwner obj) needs
 
+-- | Loads the site for the given object if it exists.
 maybeLoadSite :: (GrzObjClass o, GrzSiteClass os) => 
-    GrzHandle 
-    -> (GrzObj -> os) 
-    -> o 
-    -> [String]
-    -> IO (Maybe os)
+    GrzHandle           -- ^ data handle
+    -> (GrzObj -> os)   -- ^ expected type wrapper for site
+    -> o                -- ^ object which we are returning the site for
+    -> [String]         -- ^ metadata names needed (use fields function to provide this in a typesafe way)
+    -> IO (Maybe os)    -- ^ maybe returns the site
     
 maybeLoadSite grzH w obj needs = maybeLoadObj grzH w (getSite obj) needs
 
--- TODO: need some exception handling here   
-saveObj :: GrzObjClass o => GrzHandle -> o -> IO o
+-- TODO: need some exception handling here
+-- | Saves the given object data to the database and resets the timeUpdated field.   
+saveObj :: GrzObjClass o => 
+    GrzHandle   -- ^ data handle
+    -> o        -- ^ object to save   
+    -> IO o     -- ^ updated object
 saveObj grzH o =
     do 
         ptime <- getPOSIXTime
@@ -251,13 +269,13 @@ saveObj grzH o =
         query = "UPDATE objects SET ownerGuid = ?, containerGuid = ?, siteGuid = ?, timeUpdated = ? WHERE guid = ?"
 
 {-|
-  delObj deletes all the object data including metadata and relationships and recursively
+  Deletes all the object data including metadata and relationships and recursively
   deletes all the objects that have this object as a container, owner or site.
-  
-  TODO: add a version that allows providing a function to do something before an object is deleted.
--} 
-
-delObj :: GrzObjClass o => GrzHandle -> o -> IO Bool
+-}
+delObj :: GrzObjClass o => 
+    GrzHandle   -- ^ data handle
+    -> o        -- ^ object to delete
+    -> IO Bool  -- ^ success status
 delObj grzH obj = do
     r <- delObjByID grzH (getID obj)
     if r
@@ -334,72 +352,34 @@ setEnableObjByID grzH state guid  =
         object_query = "UPDATE objects SET enabled = ? WHERE guid = ?"
 
 {-|
-  disableObj disables the object and recursively disables all the objects that
+  Disables the object and recursively disables all the objects that
   have this object as a container, owner or site.
-  
-  TODO: add a version that allows providing a function to do something before
-  an object is disabled.
--}         
+-}
+disableObj :: GrzObjClass o => 
+    GrzHandle   -- ^ data handle
+    -> o        -- ^ object to disable
+    -> IO Bool  -- ^ success status   
 disableObj grzH obj = setEnableObj grzH False obj
 
 {-|
-  enableObj enables the object and recursively enables all the objects that
+  Enables the object and recursively enables all the objects that
   have this object as a container, owner or site.
-  
-  TODO: add a version that allows providing a function to do something before
-  an object is enabled.
--}    
+-}
+enableObj :: GrzObjClass o => 
+    GrzHandle   -- ^ data handle
+    -> o        -- ^ object to enable
+    -> IO Bool  -- ^ success status     
 enableObj grzH obj = setEnableObj grzH True obj
         
-ppObj :: GrzObjClass o => o -> String
-ppObj = ppObj' . unwrapObj
+-- relationship functions                  
 
-ppObj' :: GrzObj -> String
-ppObj' (GrzObjID i) = "object " ++ (show i)
-ppObj' obj = (getType obj)
-                ++ " "
-                ++ (show $ getID obj) 
-
-ppObjFull :: GrzObjClass o => o -> String
-ppObjFull = ppObjFull' . unwrapObj
-
-ppObjFull' :: GrzObj -> String
-ppObjFull' (GrzObjID i) = "object " ++ (show i)
-ppObjFull' obj = (getType obj)
-                ++ " "
-                ++ (show $ getID obj) 
-                ++ " {\n\n"
-                ++ "    timeCreated: \t"
-                ++ (convertTime $ getTimeCreated obj)
-                ++ "\n    timeUpdated: \t"
-                ++ (convertTime $ getTimeUpdated obj)
-                ++ "\n    owner: \t\t"
-                ++ (show $ getOwner obj)
-                ++ "\n    container: \t\t"
-                ++ (show $ getContainer obj)
-                ++ "\n    site: \t\t"
-                ++ (show $ getSite obj)
-                ++ "\n    enabled: \t\t"
-                ++ (if isEnabled obj then "True" else "False")
-                ++ "\n\n    metadata:\n\n"
-                ++ (ppAtomBox $ getMetadata obj)
-                ++ "\n}\n"           
-     where
-        convertTime t = (formatTime defaultTimeLocale "%c" (posixSecondsToUTCTime $ fromIntegral $ t))
-        
-ppAtomBox :: GrzAtomBox -> String
-ppAtomBox box =
-    intercalate "\n\n" $ map ppAtomPair (Map.toList box)
-    
-ppAtomPair :: (GrzKey,[GrzAtom]) -> String
-ppAtomPair (k,v) = "        " ++ k ++ ": \n            " ++ (ppAtomList v) 
-
-ppAtomList v = intercalate ", " (map ppAtom v)      
-        
--- relationship functions
--- TODO: make relationships full types and not just strings                    
-
-addRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> GrzRel -> o1 -> o2 -> IO ()
+-- | Adds the relationship to the given objects (if it does not exist).
+addRel :: (GrzObjClass o1, GrzObjClass o2) => 
+    GrzHandle   -- ^ data handle
+    -> GrzRel   -- ^ relationship
+    -> o1       -- ^ first object
+    -> o2       -- ^ second object
+    -> IO ()
 addRel grzH (GrzRel rel) obj1 obj2 =
     do
         b <- checkRel grzH (GrzRel rel) obj1 obj2
@@ -416,7 +396,13 @@ addRel grzH (GrzRel rel) obj1 obj2 =
     where
         query = "INSERT INTO relationships(guid1,guid2,relationshipType,timeCreated) VALUES(?,?,?,?)"
         
-delRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> GrzRel -> o1 -> o2 -> IO ()
+-- | Removes the relationship from the given objects (if it exists).        
+delRel :: (GrzObjClass o1, GrzObjClass o2) => 
+    GrzHandle   -- ^ data handle
+    -> GrzRel   -- ^ relationship 
+    -> o1       -- ^ first object
+    -> o2       -- ^ second object 
+    -> IO ()
 delRel grzH (GrzRel rel) obj1 obj2 =
     do
         maybeH <- maybeGetStringHandle grzH rel
@@ -427,8 +413,14 @@ delRel grzH (GrzRel rel) obj1 obj2 =
                 grzCommit grzH
     where
         query = "DELETE FROM relationships WHERE guid1 = ? AND guid2 = ? AND relationshipType = ?"   
-   
-checkRel :: (GrzObjClass o1, GrzObjClass o2) => GrzHandle -> GrzRel -> o1 -> o2 -> IO Bool
+
+-- | Returns True if the given relationship exists, otherwise False.   
+checkRel :: (GrzObjClass o1, GrzObjClass o2) => 
+    GrzHandle   -- ^ data handle
+    -> GrzRel   -- ^ relationship
+    -> o1       -- ^ first object
+    -> o2       -- ^ second object
+    -> IO Bool  -- ^ True or False
 checkRel grzH (GrzRel rel) obj1 obj2 =
     do
         maybeH <- maybeGetStringHandle grzH rel
@@ -440,18 +432,24 @@ checkRel grzH (GrzRel rel) obj1 obj2 =
     where
         query = "SELECT * FROM relationships WHERE guid1 = ? AND guid2 = ? AND relationshipType = ?" 
         
--- define the three special relationships
+-- | The relationship between an object and its container
+hasContainer :: GrzRel
 hasContainer = GrzRel "hasContainer"
+
+-- | The relationship between an object and its owner
+hasOwner :: GrzRel
 hasOwner = GrzRel "hasOwner"
+
+-- | The relationship between an object and its site
+hasSite :: GrzRel
 hasSite = GrzRel "hasSite"
         
 {-|
-  setSearchable tells the object store which fields are searchable.
--} 
-        
+  Tells the object store which fields are searchable.
+-}        
 setSearchable :: GrzObjClass o => 
     GrzHandle           -- ^ data handle
-    -> (GrzObj -> o)    -- ^ wrapper 
+    -> (GrzObj -> o)    -- ^ type wrapper 
     -> [String]         -- ^ list of names for metadata to be searchable for this type wrapper
     -> IO ()
 setSearchable grzH w ns = do
@@ -464,25 +462,9 @@ setSearchable grzH w ns = do
         ot = objWrapperToString (w emptyObj)
         deleteQuery = "DELETE FROM searchable WHERE typeID = ?"
         insertQuery = "INSERT INTO searchable(typeID, nameID) values (?,?)"
-    
-noMetadata = []
-allMetadata = ["*"]
-
--- needsToKeys (NeedsAll) = ["*"]
--- needsToKeys (NeedsString x) = map atomKey x
--- needsToKeys (NeedsInt x) = map atomKey x
--- needsToKeys (NeedsBool x) = map atomKey x   
--- needsToKeys (NeedsAtom x) = map atomKey x     
-
--- getOrderBit grzH query orderBy = do
---     orderList <- mapM (getOrderBy grzH (getHandleDict query)) orderBy'
---     let orderBit = (concatMap snd orderList) ++ " ORDER BY " ++ (intercalate "," $ map fst orderList)
---     return orderBit
---     where
---         orderBy' = if null orderBy then [GuidDesc] else orderBy  
                     
 {-|
-  getUnwrappedObjs runs a query definition and retrieves a list of 
+  Runs a query definition and retrieves a list of 
   unwrapped objects from the database. Provide a limit of 0 to get all objects
   for the query.
 -}        
@@ -503,7 +485,7 @@ getUnwrappedObjs grzH queryDefs needs orderBy limit offset =
         limitBit = getLimitBit grzH offset limit     
           
 {-|
-  getObjs runs a query definition and retrieves a list of objects with the
+  Runs a query definition and retrieves a list of objects with the
   given type from the database. Provide a limit of 0 to get all objects for
   the query.
 -}        
@@ -525,7 +507,7 @@ getObjs grzH w queryDefs needs orderBy limit offset =
         limitBit = getLimitBit grzH offset limit
                 
 {-|
-  getObjIDs runs a query definiton and retrieves a list of object ids from the
+  Runs a query definiton and retrieves a list of object ids from the
   database. Provide a limit of 0 to get all object ids for the query.
 -}        
 getObjIDs :: GrzHandle                  -- ^ data handle
@@ -543,12 +525,12 @@ getObjIDs grzH queryDefs orderBy limit offset =
         limitBit = getLimitBit grzH offset limit
         
 {-|
-  getBareObjs runs a query definition and retrieves a list of bare objects
+  Runs a query definition and retrieves a list of bare objects
   (w (GrzObjID id) ) from the database. Provide a limit of 0 to get all objects
   for the query.
 -}        
 getBareObjs :: GrzObjClass o =>
-        GrzHandle                       -- ^ The data handle
+        GrzHandle                       -- ^ data handle
     -> (GrzObj -> o)                    -- ^ wrapper
     -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition
     -> [GrzOrderBy]                     -- ^ order by
@@ -559,13 +541,13 @@ getBareObjs grzH w queryDefs orderBy limit offset =
     fmap (map (w . GrzObjID) ) (getObjIDs grzH ((hasType w) . queryDefs) orderBy offset limit)
 
 {-|
-  getUnwrappedBareObjs runs a query definition and retrieves a list of unwrapped
+  Runs a query definition and retrieves a list of unwrapped
   bare objects (GrzObjID id) from the database. Provide a limit of 0 to get all
   objects for the query.
 -}        
 getUnwrappedBareObjs :: 
-        GrzHandle                       -- ^ The data handle
-    -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition
+        GrzHandle                       -- ^ data handle
+    -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition
     -> [GrzOrderBy]                     -- ^ order by
     -> Int                              -- ^ limit (number of objects to return)
     -> Int                              -- ^ offset
@@ -574,12 +556,12 @@ getUnwrappedBareObjs grzH queryDefs orderBy limit offset = fmap (map GrzObjID) (
 
         
 {-|
-  The 'getObjCount' function runs a query definition and retrieves a count of objects
+  Runs a query definition and retrieves a count of objects
   from the database.
 -}        
 getObjCount :: 
     GrzHandle                           -- ^ data handle
-    -> (GrzQueryDef -> GrzQueryDef)     -- ^ Query definition 
+    -> (GrzQueryDef -> GrzQueryDef)     -- ^ query definition 
     -> IO Int                           -- ^ count of objects
 getObjCount grzH queryDefs =
     do
@@ -588,8 +570,8 @@ getObjCount grzH queryDefs =
         return $ queryResultToCount result
                         
 {-|
-  The 'getObjsAggByObjCount' function takes a query definition and two types.
-  It retrieves a list of objects with an aggregated count associated with each.
+  Takes a query definition and two types, and retrieves a list of objects with 
+  an aggregated count associated with each.
 -}        
 getObjsAggByObjCount :: (GrzObjClass o1, GrzObjClass o2) =>
     GrzHandle                            -- ^ data handle
@@ -614,9 +596,9 @@ getObjsAggByObjCount grzH w1 w2 queryDefs needs orderBy limit offset =
         limitBit = getLimitBit grzH offset limit
         
 {-|
-  The 'getObjsAggByObjSumCount' function takes a query definition, a metadata 
-  name and two types. It retrieves a list of objects with an aggregated sum 
-  (of the metadata value) and count associated with each.
+  Takes a query definition, two types and a metadata 
+  name; retrieves a list of objects with an aggregated sum 
+  (of the metadata value) and the count associated with each.
 -}        
 getObjsAggByObjSumCount :: (GrzObjClass o1, GrzObjClass o2, GrzAtomKeyClass k) =>
     GrzHandle                            -- ^ data handle
@@ -646,8 +628,8 @@ getObjsAggByObjSumCount grzH w1 w2 queryDefs name needs orderBy limit offset =
         limitBit = getLimitBit grzH offset limit
         
 {-|
-  The 'getObjSumCount' function takes a query definition and a metadata name.
-  It retrieves a tuple (sum, count) of objects from the database that have 
+  Takes a query definition and a metadata name; 
+  retrieves a tuple (sum, count) of objects from the database that have 
   metadata integer values with that name.
 -}        
 getObjSumCount :: GrzAtomKeyClass k =>

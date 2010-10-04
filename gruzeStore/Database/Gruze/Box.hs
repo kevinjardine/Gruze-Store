@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+
 module Database.Gruze.Box (
 
     -- constructors (note that the internals of GrzObj are not exported)
@@ -14,15 +15,22 @@ module Database.Gruze.Box (
     -- types
     GrzAtom, GrzAtomBox, GrzObjBox, GrzInt, GrzString, GrzKey,
 
-    -- atom converters
+    -- * Atom converters
+    -- ** Strings
     atomToString, maybeAtomToString, safeAtomToString, forceAtomToString, 
     ppAtom, stringToAtom, isStringAtom,
+    -- ** Ints
     atomToInt, maybeAtomToInt, safeAtomToInt, intToAtom, isIntAtom,
+    -- ** Bools
     atomToBool, maybeAtomToBool, boolToAtom, isBoolAtom,
+    -- ** Files
     atomToFileID, maybeAtomToFileID, isFileAtom,
     
-    -- special object constructors
+    -- * special object constructors
     emptyObj, emptyBareObj,
+    
+    -- * pretty printers
+    ppAtomBox, ppObj, ppObjFull,
     
     -- object setter (setType is only allowed for generic GrzObjs)    
     setType,
@@ -30,10 +38,10 @@ module Database.Gruze.Box (
     -- object type convert    
     maybeConvert, objWrapperToString,
     
-    -- atom box functions
+    -- * atom box functions
     
     emptyAtomBox, addAtomPair, addAtomPairs, removeFromAtomBox, 
-    getKeysFromAtomBox, fields,
+    getKeysFromAtomBox, fields, noMetadata, allMetadata,
     
     -- object box functions 
 
@@ -53,18 +61,23 @@ import Data.List (foldl')
 import Data.Maybe
 import Data.Typeable
 import Data.List.Split
-    
--- this is only defined for string atoms
--- anything else will cause a run time error
+import Data.List (intercalate)
+import Data.Time.Clock.POSIX
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.Format
+import System.Locale (defaultTimeLocale)
+   
+-- | This is only defined for string atoms.
+-- Anything else will cause a run time error.
 atomToString :: GrzAtom -> GrzString  
 atomToString (GrzAtomString v) = v
 
--- a safer maybe version
+-- | A safer maybe version.
 maybeAtomToString :: GrzAtom -> Maybe GrzString  
 maybeAtomToString (GrzAtomString v) = Just v
 maybeAtomToString _ = Nothing
 
--- another safe version that converts all but strings to the empty string
+-- | Another safe version that converts all but strings to the empty string
 safeAtomToString :: GrzAtom -> GrzString  
 safeAtomToString (GrzAtomInt a) = ""
 safeAtomToString (GrzAtomBool True) = ""
@@ -72,7 +85,7 @@ safeAtomToString (GrzAtomBool False) = ""
 safeAtomToString (GrzAtomString a) = a
 safeAtomToString (GrzAtomFile a) = ""
 
--- another safe version that converts everything
+-- | Another safe version that converts everything. This is probably the one you want to use for web forms.
 forceAtomToString :: GrzAtom -> GrzString  
 forceAtomToString (GrzAtomInt a) = show a
 forceAtomToString (GrzAtomBool True) = "True"
@@ -80,7 +93,7 @@ forceAtomToString (GrzAtomBool False) = "False"
 forceAtomToString (GrzAtomString a) = a
 forceAtomToString (GrzAtomFile a) = "File " ++ (show a)
 
--- another safe version that converts everything    
+-- | An atom prett printer.
 ppAtom :: GrzAtom -> GrzString  
 ppAtom (GrzAtomInt a) = show a
 ppAtom (GrzAtomBool True) = "True"
@@ -95,12 +108,14 @@ isStringAtom :: GrzAtom -> Bool
 isStringAtom (GrzAtomString _) = True
 isStringAtom _ = False
 
--- this is only defined for boolean atoms
--- anything else will cause a run time error
+-- Bools
+
+-- | This is only defined for bool atoms.
+-- Anything else will cause a run time error.
 atomToBool :: GrzAtom -> Bool  
 atomToBool (GrzAtomBool v) = v
 
--- a safer maybe version
+-- A safer maybe version.
 maybeAtomToBool :: GrzAtom -> Maybe Bool  
 maybeAtomToBool (GrzAtomBool v) = Just v
 maybeAtomToBool _ = Nothing
@@ -112,17 +127,19 @@ isBoolAtom :: GrzAtom -> Bool
 isBoolAtom (GrzAtomBool _) = True
 isBoolAtom _ = False
 
--- this is only defined for int atoms
--- anything else will cause a run time error
+-- Ints
+
+-- | This is only defined for int atoms.
+-- Anything else will cause a run time error.
 atomToInt :: GrzAtom -> GrzInt 
 atomToInt (GrzAtomInt v) = v
 
--- a safer maybe version
+-- ! A safer maybe version.
 maybeAtomToInt :: GrzAtom -> Maybe GrzInt  
 maybeAtomToInt (GrzAtomInt v) = Just v
 maybeAtomToInt _ = Nothing
 
--- another safe version that converts everything
+-- | Another safe version that converts everything.
 safeAtomToInt :: GrzAtom -> Int  
 safeAtomToInt (GrzAtomInt a) = a
 safeAtomToInt (GrzAtomFile a) = a
@@ -137,12 +154,14 @@ isIntAtom :: GrzAtom -> Bool
 isIntAtom (GrzAtomInt _) = True
 isIntAtom _ = False
 
--- this is only defined for file atoms
--- anything else will cause a run time error
+-- Files
+
+-- | This is only defined for file atoms.
+-- Anything else will cause a run time error.
 atomToFileID :: GrzAtom -> GrzInt
 atomToFileID (GrzAtomFile v) = v
 
--- a safer maybe version
+-- | A safer maybe version.
 maybeAtomToFileID :: GrzAtom -> Maybe GrzInt  
 maybeAtomToFileID (GrzAtomFile v) = Just v
 maybeAtomToFileID _ = Nothing
@@ -157,6 +176,8 @@ isFileAtom (GrzAtomFile _) = True
 isFileAtom _ = False
 
 -- * Gruze atom box getters and setters
+
+-- a lot of boilerplate underpinning the atom box access functions
 
 setAtom :: GrzAtomBoxClass c => GrzKey -> GrzAtom -> c -> c   
 setAtom k a c = putAtomBox (Map.insert k [a] (getAtomBox c)) c
@@ -373,29 +394,26 @@ instance GrzAtomKeyClass Bool where
     addList k t b = addBoolList (atomKey k) t b
     getList k t b = getBoolList (atomKey k) t b
     maybeGetList k b = maybeGetBoolList (atomKey k) b
-                        
--- TODO: file getters and setters
--- as files cannot be forged, not sure how to do that yet
     
--- * Gruze object getters and setters
+-- Gruze object getters and setters
 
 class Typeable o => GrzObjClass o where
-    getID :: o -> GrzInt
-    unwrapObj :: o -> GrzObj
-    applyObj :: (GrzObj -> GrzObj) -> o -> o
-    replaceObj :: o -> GrzObj -> o
-    shrinkObj :: o -> o
-    isValidObj :: o -> Bool
-    getType :: o -> GrzString
-    getTimeCreated :: o -> GrzInt
-    getTimeUpdated :: o -> GrzInt
-    getContainer :: o -> GrzObj
-    getOwner :: o -> GrzObj
-    getSite :: o -> GrzObj
-    setEnabled :: Bool -> o -> o
-    isEnabled :: o -> Bool
-    getMetadata :: o -> GrzAtomBox
-    setMetadata :: o -> GrzAtomBox -> o
+    getID :: o -> GrzInt                        -- ^ returns the object's ID (unique for valid objects)
+    unwrapObj :: o -> GrzObj                    -- ^ unwraps an object
+    applyObj :: (GrzObj -> GrzObj) -> o -> o    -- ^ takes a function on unwrapped objects, lifts it, and applies it to the wrapped object
+    replaceObj :: o -> GrzObj -> o              -- ^ returns the second object wrapped with the same type as the first object
+    shrinkObj :: o -> o                         -- ^ converts the object to a bare object (GrzObjID Int)
+    isValidObj :: o -> Bool                     -- ^ returns False if this is an empty object (full or bare)
+    getType :: o -> GrzString                   -- ^ returns the type of a wrapped object as a string
+    getTimeCreated :: o -> GrzInt               -- ^ returns the creation time (in POSIX seconds)
+    getTimeUpdated :: o -> GrzInt               -- ^ returns the update time (in POSIX seconds)
+    getContainer :: o -> GrzObj                 -- ^ returns the bare container
+    getOwner :: o -> GrzObj                     -- ^ returns the bare owner
+    getSite :: o -> GrzObj                      -- ^ returns the bare site
+    setEnabled :: Bool -> o -> o                -- ^ sets the enabled/disabled flag
+    isEnabled :: o -> Bool                      -- ^ returns True if object is enabled
+    getMetadata :: o -> GrzAtomBox              -- ^ returns the object's atom box
+    setMetadata :: o -> GrzAtomBox -> o         -- ^ returns the object with the new atom box
 
 class GrzObjClass oc => GrzContainerClass oc where    
     setContainer :: GrzObjClass o => oc -> o -> o
@@ -435,9 +453,12 @@ instance GrzOwnerClass GrzObj where
 instance GrzSiteClass GrzObj where         
     setSite site obj = replaceObj obj ((unwrapObj obj)  { objSite = unwrapObj site })       
 
+-- | Takes a wrapped object and returns the name of the wrapper as a string.    
 objWrapperToString :: (Typeable o, GrzObjClass o) => o -> String
 objWrapperToString obj = last $ splitOn "." (show $ typeOf obj)
 
+-- |Attempts to wrap an unwrapped object. Returns Nothing if the unwrapped object has
+-- the wrong type.
 maybeConvert :: (Typeable o, GrzObjClass o) => (GrzObj -> o) -> GrzObj -> Maybe o
 maybeConvert w obj = 
     if getType castObj == objWrapperToString castObj
@@ -450,15 +471,63 @@ maybeConvert w obj =
 convert :: (Typeable o, GrzObjClass o) => (GrzObj -> o) -> GrzObj -> o    
 convert w obj = w $ obj { objType = objWrapperToString (w obj) }
 
+-- | This function can only be used on unwrapped objects to set the type. 
 setType :: String -> GrzObj -> GrzObj        
 setType t obj = obj { objType = t }
 
 emptyBareObj = GrzObjID 0
 emptyObj = GrzObjFull 0 "" 0 0 emptyBareObj emptyBareObj emptyBareObj True emptyAtomBox
 
+-- | Pretty prints the contents of an atom box. 
+ppAtomBox :: GrzAtomBox -> String
+ppAtomBox box =
+    intercalate "\n\n" $ map ppAtomPair (Map.toList box)
+    
+ppAtomPair :: (GrzKey,[GrzAtom]) -> String
+ppAtomPair (k,v) = "        " ++ k ++ ": \n            " ++ (ppAtomList v) 
+
+ppAtomList v = intercalate ", " (map ppAtom v)
+
+-- | Pretty prints an object in a short form.
+ppObj :: GrzObjClass o => o -> String
+ppObj = ppObj' . unwrapObj
+
+ppObj' :: GrzObj -> String
+ppObj' (GrzObjID i) = "object " ++ (show i)
+ppObj' obj = (getType obj)
+                ++ " "
+                ++ (show $ getID obj) 
+
+-- | Pretty prints an object in a detailed form.
+ppObjFull :: GrzObjClass o => o -> String
+ppObjFull = ppObjFull' . unwrapObj
+
+ppObjFull' :: GrzObj -> String
+ppObjFull' (GrzObjID i) = "object " ++ (show i)
+ppObjFull' obj = (getType obj)
+                ++ " "
+                ++ (show $ getID obj) 
+                ++ " {\n\n"
+                ++ "    timeCreated: \t"
+                ++ (convertTime $ getTimeCreated obj)
+                ++ "\n    timeUpdated: \t"
+                ++ (convertTime $ getTimeUpdated obj)
+                ++ "\n    owner: \t\t"
+                ++ (show $ getOwner obj)
+                ++ "\n    container: \t\t"
+                ++ (show $ getContainer obj)
+                ++ "\n    site: \t\t"
+                ++ (show $ getSite obj)
+                ++ "\n    enabled: \t\t"
+                ++ (if isEnabled obj then "True" else "False")
+                ++ "\n\n    metadata:\n\n"
+                ++ (ppAtomBox $ getMetadata obj)
+                ++ "\n}\n"           
+     where
+        convertTime t = (formatTime defaultTimeLocale "%c" (posixSecondsToUTCTime $ fromIntegral $ t)) 
+
 -- | a polyvariadic function that takes typed keys and converts
 -- them into a list of string names
-
 fields :: (GrzAtomKeyClass a, GrzFieldsClass r) => GrzAtomKey a -> r
 fields k = fields' k []
 
@@ -471,6 +540,14 @@ instance GrzFieldsClass [String] where
 instance (GrzAtomKeyClass a, GrzFieldsClass r) => GrzFieldsClass (GrzAtomKey a -> r) where
     fields' k ss = (\a -> fields' k (atomKey a : ss))
 
+-- | can be used in place of fields when you want no metadata returned from the database
+noMetadata :: [String]        
+noMetadata = []
+
+-- | can be used in place of fields when you want all metadata returned from the database
+allMetadata :: [String]
+allMetadata = ["*"]
+    
 -- * Gruze object box getters and setters
     
 setObj :: GrzObjBoxClass c => GrzKey -> GrzObj -> c -> c    

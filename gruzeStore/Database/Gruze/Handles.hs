@@ -90,8 +90,13 @@ getFileHandle grzH ofn ct locd locf time = do
         getLastInsertId grzH
     where
         query = "INSERT INTO files(originalName,contentType,locationDir,locationFile,timeCreated) values(?,?,?,?,?)"
-        
-maybeGetFileMetadata :: GrzHandle -> GrzAtom -> IO (Maybe ([String],Int))
+
+-- | Attempts to get the original name, content type, location directory, location file and 
+-- time created for a file atom
+maybeGetFileMetadata :: 
+    GrzHandle                       -- ^ data handle
+    -> GrzAtom                      -- ^ file atom
+    -> IO (Maybe ([String],Int))    -- ^ Maybe results
 maybeGetFileMetadata grzH (GrzAtomFile i) = do
         val <- grzQuery grzH query [toSql i]
         return $ getFileMetadataResult val
@@ -115,11 +120,20 @@ maybeGetFileContent' grzH a@(GrzAtomFile i) prefix = do
                                                     return $ Just v
                     otherwise -> return Nothing
 maybeGetFileContent' _ _ _ = return Nothing
-                    
-maybeGetFileContent :: GrzHandle -> GrzAtom -> IO (Maybe B.ByteString)
+
+-- | attempts to get the file content                    
+maybeGetFileContent :: 
+    GrzHandle                   -- ^ data handle
+    -> GrzAtom                  -- ^ file atom
+    -> IO (Maybe B.ByteString)  -- ^ returns a Maybe Bytestring value
 maybeGetFileContent grzH a = maybeGetFileContent' grzH a ""
 
-maybeGetFileThumb :: GrzHandle -> String -> GrzAtom -> IO (Maybe B.ByteString)
+-- | Attempts to get a file thumbnail for a given size
+maybeGetFileThumb :: 
+    GrzHandle                   -- ^ data handle
+    -> String                   -- ^ thumbnail size
+    -> GrzAtom                  -- ^ file atom
+    -> IO (Maybe B.ByteString)  -- ^ returns a Maybe Bytestring value
 maybeGetFileThumb grzH s a = maybeGetFileContent' grzH a s
 
 delFile :: GrzHandle -> GrzAtom -> IO Bool
@@ -152,8 +166,14 @@ generateFileLocationDirectory dataDir d = do
     let dir = dataDir ++ "/" ++ loc
     createDirectoryIfMissing True dir
     return loc
-      
-createFileAtom :: GrzHandle -> String -> String -> B.ByteString -> IO GrzAtom
+
+-- | Create a file atom.      
+createFileAtom :: 
+    GrzHandle           -- ^ data handle
+    -> String           -- ^ original file name
+    -> String           -- ^ content (MIME) type
+    -> B.ByteString     -- ^ file content as a bytestring 
+    -> IO GrzAtom       -- ^ returns a file atom
 createFileAtom grzH ofn ct ubs =  do
         ptime <- getPOSIXTime
         let time = floor ptime

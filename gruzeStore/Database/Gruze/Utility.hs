@@ -42,22 +42,26 @@ transformStringClause grzH sc =
         GrzPostgreSQLDB -> replace sc "LIKE" "ILIKE"
         otherwise -> sc
 
+-- | Runs a SELECT (something that returns values)
 grzQuery :: GrzHandle -> String -> [SqlValue] -> IO [[SqlValue]]  
 grzQuery grzH@( GrzHandle {grzDatabaseHandle = dbc} ) query values =
     do
         grzLog grzH DebugLogLevel $ "query: " ++ query ++ " values: " ++ (show values)
         handleSqlError $ quickQuery' dbc query values
         
+-- | Runs an INSERT, UPDATE or other SQL command that does not return values        
 grzRunSql :: GrzHandle -> String -> [SqlValue] -> IO ()  
 grzRunSql grzH@( GrzHandle {grzDatabaseHandle = dbc} ) query values =
     do
         grzLog grzH DebugLogLevel $ "run sql: " ++ query ++ " values: " ++ (show values)
         handleSqlError $ run dbc query values
         return ()
-        
+
+-- | Commits a database update.      
 grzCommit :: GrzHandle -> IO ()
 grzCommit grzH@( GrzHandle {grzDatabaseHandle = dbc} ) = commit dbc
 
+-- | Rolls back a database update. 
 grzRollback :: GrzHandle -> IO ()
 grzRollback grzH@( GrzHandle {grzDatabaseHandle = dbc} ) = rollback dbc
   
@@ -66,7 +70,13 @@ logLevelToString = [    (DebugLogLevel,"DEBUG"),
                         (WarningLogLevel,"WARNING"),
                         (FatalLogLevel,"FATAL")
                    ]
-grzLog :: GrzHandle -> GrzLogLevel -> String -> IO ()                 
+                   
+-- | Logs a message.
+grzLog ::
+    GrzHandle           -- ^ data handle
+    -> GrzLogLevel      -- ^ log level 
+    -> String           -- ^ log message
+    -> IO ()                 
 grzLog grzH level s = do
     if level >= (grzLogLevel grzH)
         then do

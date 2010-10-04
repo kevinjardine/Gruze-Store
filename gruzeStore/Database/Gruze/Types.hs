@@ -86,14 +86,14 @@ data GrzAtomKey a = GrzAtomKey {
     deriving (Eq, Show)
 
 class GrzAtomKeyClass t where
-    set :: GrzAtomBoxClass b => GrzAtomKey t -> t -> b -> b
-    add :: GrzAtomBoxClass b => GrzAtomKey t -> t -> b -> b
-    get :: GrzAtomBoxClass b => GrzAtomKey t -> t -> b -> t
-    maybeGet :: GrzAtomBoxClass b => GrzAtomKey t -> b -> Maybe t
-    setList :: GrzAtomBoxClass b => GrzAtomKey t -> [t] -> b -> b
-    addList :: GrzAtomBoxClass b => GrzAtomKey t -> [t] -> b -> b
-    getList :: GrzAtomBoxClass b => GrzAtomKey t -> [t] -> b -> [t]
-    maybeGetList :: GrzAtomBoxClass b => GrzAtomKey t -> b -> Maybe [t]
+    set :: GrzAtomBoxClass b => GrzAtomKey t -> t -> b -> b                 -- ^ replaces the current value with a single value (or creates a new one)
+    add :: GrzAtomBoxClass b => GrzAtomKey t -> t -> b -> b                 -- ^ appends to the current values (or creates a new one)
+    get :: GrzAtomBoxClass b => GrzAtomKey t -> t -> b -> t                 -- ^ gets the current value (the first one if there are several defined for this field) or returns the default value supplied
+    maybeGet :: GrzAtomBoxClass b => GrzAtomKey t -> b -> Maybe t           -- ^ gets the current value (the first one if there are several defined for this field) or returns Nothing
+    setList :: GrzAtomBoxClass b => GrzAtomKey t -> [t] -> b -> b           -- ^ replaces the current value with a list (or creates a new one)
+    addList :: GrzAtomBoxClass b => GrzAtomKey t -> [t] -> b -> b           -- ^ appends the list to the current values (or creates a new one)
+    getList :: GrzAtomBoxClass b => GrzAtomKey t -> [t] -> b -> [t]         -- ^ gets the current list of values for this field or returns the default list supplied
+    maybeGetList :: GrzAtomBoxClass b => GrzAtomKey t -> b -> Maybe [t]     -- ^ gets the current list of values for this field or returns Nothing
 
 type GrzAtomIntKey = GrzAtomKey Int
 type GrzAtomStringKey = GrzAtomKey String

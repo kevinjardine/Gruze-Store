@@ -2,116 +2,121 @@ module Database.Gruze (
 
     -- defines the public interface for the Gruze object store
     
-    -- first the atom, box and object constructors, getters and setters
+    -- * Pure functions for atoms, boxes and objects
     
-    -- constructors (note that the internals of GrzObj are not exported)
+    -- ** Constructors
+    -- (note that the internals of GrzObj are not exported)
 
     GrzAtomKey(..), GrzObj, GrzBox(..), GrzRel(..),
     
-    -- classes
+    -- ** Classes
     
     GrzAtomKeyClass(..),
     
-    GrzObjClass(..), GrzContainerClass(..), GrzOwnerClass(..), GrzSiteClass(..),
+    GrzObjClass(getID,unwrapObj,shrinkObj,isValidObj,getType,
+        getTimeCreated,getTimeUpdated,getContainer,getOwner,getSite,
+        setEnabled, isEnabled, getMetadata, setMetadata), 
+        
+    GrzContainerClass(..), GrzOwnerClass(..), GrzSiteClass(..),
     GrzAtomBoxClass(..),
     
-    -- types
+    -- ** Types
     GrzAtom, GrzAtomBox, 
     GrzAtomIntKey, GrzAtomStringKey, GrzAtomBoolKey, GrzAtomAtomKey,
     GrzObjBox, GrzInt, GrzString, GrzKey, GrzLogLevel(..),
     GrzDatabaseType(..),
 
-    -- atom converters
+    -- ** Atom converters
+    -- *** Strings
     atomToString, maybeAtomToString, safeAtomToString, forceAtomToString, 
     ppAtom, stringToAtom, isStringAtom,
+    -- *** Ints
     atomToInt, maybeAtomToInt, safeAtomToInt, intToAtom, isIntAtom,
+    -- *** Bools
     atomToBool, maybeAtomToBool, boolToAtom, isBoolAtom,
+    -- *** Files
     atomToFileID, maybeAtomToFileID, isFileAtom,
     
-    -- special object constructors
-    emptyObj, emptyBareObj,
+    -- ** Empty constructors
+    emptyAtomBox, emptyObj, emptyBareObj,
     
-    -- object setter (setType is only allowed for unwrapped GrzObjs)    
+    -- ** Type setter   
     setType,
     
-    -- object type convert    
-    maybeConvert, objWrapperToString,
+    -- ** Attempt to wrap object
+    maybeConvert,
     
-    -- object pretty printers
+    -- ** Pretty printers    
+    ppAtomBox, ppObj, ppObjFull,    
     
-    ppObj, ppObjFull,
-    
-    -- atom box functions
-    
-    emptyAtomBox,
-    
-    -- for atoms
+    -- ** Atom boxes
     
     addAtomPair, addAtomPairs, removeFromAtomBox, getKeysFromAtomBox,
-    fields,
     
-    -- object box functions 
-
+    -- ** Field lists
+    fields, noMetadata, allMetadata,
+    
+    -- ** Object boxes
     setObj, getObj, maybeGetObj, removeFromObjBox, getKeysFromObjBox, 
+        
+    -- * Query combinators
     
-    -- object query API
-    
-    -- types
+    -- ** Types
     GrzQueryDef, GrzRelDir(..), GrzRef(..), GrzOrderBy(..),
     
-    -- classes
+    -- ** Classes
     GrzQueryTypeClass(hasIn,hasBetween,hasOp),
     
-    -- booleans
+    -- ** Booleans
     hasTrue, hasFalse,
     
-    -- filter by specific objects
+    -- ** Filter by specific objects
     withObj, withObjs,
     
-    -- by type 
+    -- ** Select by type 
     hasType, hasTypes,
     
-    -- by enabled/disabled
+    -- ** Select by enabled/disabled
     hasEnabled, hasDisabled,
     
-    -- by the fixed relationships
+    -- ** Select by the fixed relationships
     withOwner, withContainer, withSite,
     withOwners, withContainers, withSites,
     
-    -- by general relationships
+    -- ** Select by general relationships
     hasRel,
     
-    -- by searchable fields
+    -- ** Select by searchable fields
     hasSearchable,
     
-    -- has the specified metadata names defined
+    -- ** Has the specified metadata names defined
     hasData,
     
     -- return objects with the given metadata in the results
-    withData,
+    -- withData,
 
-    -- object IO
+    -- * Object IO
     
-    -- data handle
+    -- ** Data handle
     GrzHandle(..), setDefaultSite, setThumbDefs, setLogLevel,
     
-    -- utility functions    
-    grzLog, grzCommit, grzQuery,
-    
-    -- query functions
-    getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
-    getObjCount, getObjSumCount, getObjsAggByObjCount, getObjsAggByObjSumCount, 
-    setSearchable, noMetadata, allMetadata,
-    
-    -- create, save, delete, disable, enable and load
-    createObj, saveObj, delObj, disableObj, enableObj,
-    loadObj, maybeLoadObj, maybeLoadContainer, maybeLoadOwner, maybeLoadSite,    
-
-    -- file handler
+    -- ** File atom handler
     createFileAtom, maybeGetFileMetadata, maybeGetFileContent, maybeGetFileThumb,
     
-    -- relationship IO
+    -- ** Manage individual objects
+    createObj, saveObj, delObj, disableObj, enableObj,
+    loadObj, maybeLoadObj, maybeLoadContainer, maybeLoadOwner, maybeLoadSite,
+    
+    -- ** Query retrieval functions
+    getObjs, getUnwrappedObjs, getBareObjs, getUnwrappedBareObjs, getObjIDs,
+    getObjCount, getObjSumCount, getObjsAggByObjCount, getObjsAggByObjSumCount, 
+    setSearchable,    
+    
+    -- ** Relationship IO
     addRel, delRel, checkRel, hasContainer, hasOwner, hasSite,
+    
+    -- ** Utility functions    
+    grzLog, grzCommit, grzRollback, grzQuery, grzRunSql,
     
     -- rexport some basic modules
     
